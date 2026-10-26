@@ -34,12 +34,16 @@ reconnection. A random data key encrypts the Windows password with
 AES-256-GCM. Each key protects that same data key through its own secret,
 salt, authenticated context and HKDF-derived envelope.
 
-At sign-in a fresh challenge, verified assertion and key secret unlock the
-data key. The provider commits verified counter state before releasing the
-password for Windows serialization. Its temporary result is protected,
-single use and time bounded. Windows authentication results determine whether
-the password generation is suspended. Sensitive memory is cleared on exit,
-cancellation and expiry.
+At sign-in a fresh challenge, verified assertion and derived `hmac-secret`
+output unlock the data key. The provider commits verified counter state
+before releasing the password for Windows serialization. When either the
+stored or received counter is nonzero, the received value must increase;
+an all-zero pair is accepted and offers no counter-based clone detection.
+The protected serialization is held in a pending cache that expires after
+15 seconds or is consumed once by this provider. This is a cache policy,
+not an expiry on the serialized Windows credential or a one-time password.
+Windows authentication results determine whether the password generation is
+suspended. Sensitive buffers are cleared on exit, cancellation and cache expiry.
 
 Password changes re-encrypt the password payload while retaining key
 wrappers, so enrolled keys continue to work. Concurrency checks prevent an

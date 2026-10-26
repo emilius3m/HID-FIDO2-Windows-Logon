@@ -20,6 +20,12 @@ The screenshots show the Italian interface. The manager captures come from
 [`docs/images`](../images/README.md); the PIN dialog is the one shown by
 `hid-fido2-vault.exe` during enrollment.
 
+The diagrams distinguish the internal key secret from its encrypted derived
+output. The protected password remains reusable: the provider consumes its
+pending cache once, with a 15-second cache lifetime. It does not issue a
+one-time Windows password. See the overview for counter and USB protection
+limits.
+
 ## Publishing
 
 1. In Medium, create a new story. Paste the `#` line as the title and the

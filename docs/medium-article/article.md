@@ -6,7 +6,8 @@
 
 I wanted something that sounded simple. Plug in my FIDO2 security key, type
 its PIN, touch it, and my Windows laptop unlocks. No password typed at the
-sign-in screen, and nothing to steal by looking over my shoulder.
+sign-in screen. Seeing the key PIN over my shoulder would not be enough
+without also possessing the key, under the hardware assumptions below.
 
 Windows can already sign in with a security key, but only for accounts
 managed through Microsoft Entra ID. For a plain local account there is
@@ -37,9 +38,10 @@ browser, you have to speak **CTAPHID**: 64-byte USB reports, channels,
 keep-alive messages and sequence numbers. On top of that sits **CTAP 2**,
 whose messages are encoded in **canonical CBOR**, a binary format where even
 the order of map keys is fixed. To send a PIN safely, the PIN protocol has you
-agree a one-time encryption key with the device using **elliptic-curve
-Diffie-Hellman on P-256**, and then encrypt and authenticate everything with
-AES and HMAC-SHA-256. To get a secret out of the key, you use the
+agree a fresh shared secret with the device using **elliptic-curve
+Diffie-Hellman on P-256**, then protect specific sensitive fields with AES and
+HMAC-SHA-256. This does not encrypt the entire USB channel. To obtain a
+derived secret from the key, you use the
 **hmac-secret** extension, with its own encrypted salts and its own proof of
 authenticity. Then you verify an **ES256 signature** over the key's
 authenticator data.
@@ -58,12 +60,18 @@ in this life".
 ## How it works, in one picture
 
 The idea is simple even if the parts are not. Your Windows password is
-encrypted and stored in a machine vault. The key that decrypts it can only be
-rebuilt from a secret that the physical security key computes, and the
-security key only computes it after verifying its PIN and feeling a touch. A
-credential provider running inside the Windows sign-in screen does that
-dance, decrypts the password in memory and hands it to the normal Windows
-authentication. Windows still decides who gets in.
+encrypted and stored in a machine vault. A derived output from the security
+key unlocks the data key that decrypts it. The credential provider accepts
+that output only with a verified signed assertion confirming PIN verification
+and a touch. Enrollment separately tests that a client without PIN
+verification cannot get the same output; this still depends on the key's
+firmware and has not been independently certified. The provider decrypts the
+password in memory and hands it to normal Windows authentication. Windows
+still decides who gets in, and its normal password option remains available.
+
+The key's signing private key and internal root secret stay inside the
+device. The derived `hmac-secret` output is returned encrypted and becomes
+available in the provider's memory, where it is used to unwrap the data key.
 
 ![Architecture: a native manager and vault helper for setup; a credential provider inside LogonUI for sign-in; both use the security key and the encrypted vault; the provider hands a protected password to Windows authentication](images/architecture.png)
 *Two programs share one key and one vault. Neither of them grants access: Windows does.*
@@ -86,20 +94,29 @@ This is what happens between pressing **Sign in** and seeing the desktop.
 
 A few of those steps carry most of the security:
 
-- **Step 4:** every sign-in starts with a fresh encrypted channel to the key.
-  Someone sniffing the USB cable sees only throwaway ciphertext.
+- **Step 4:** each attempt uses a fresh ECDH shared secret. The PIN hash,
+  PIN token, extension salt and derived output travel encrypted; other USB
+  protocol fields remain visible. This key agreement alone does not verify
+  the device's identity.
 - **Steps 5 and 6:** the PIN is checked by the security key itself, which
   counts wrong attempts and locks itself after a few. My software never retries
   a PIN on its own.
 - **Step 8:** the touch. No program can touch the key for you.
 - **Step 10:** the answer is checked like a signed document: signature,
-  challenge, PIN-verified flag, touch flag and a counter that must always go
-  up. A recorded or cloned answer fails here.
+  challenge, relying-party binding, PIN-verified flag and touch flag. A
+  recorded answer fails for a fresh challenge. Nonzero counters must also
+  increase; all-zero counters are accepted, so counter checks cannot detect
+  every cloned key.
 - **Steps 11 to 13:** only now is the vault opened, and the password exists
   only in memory, for a few seconds.
+- **Step 14:** the provider caches the protected password serialization for
+  at most 15 seconds while waiting to submit it, and consumes that cache once.
+  This limits retention in the provider; it does not make the password a
+  one-time password or impose an expiry on Windows authentication.
 - **Steps 15 and 16:** Windows checks the password with all its usual rules.
-  If Windows ever rejects it, key sign-in is suspended rather than retried, so
-  it can never lock you out.
+  Password-related rejections suspend the provider's record rather than
+  repeating the same stale password. A failed submission can still count
+  toward Windows account lockout.
 
 I could explain all of this to you now. Before this project, I could not have
 explained a single step of it.
@@ -179,9 +196,10 @@ was invisible, and traced it to an old Windows rule: the show-window setting a
 process is started with is silently applied to the first window it opens. My
 launcher had hidden a console, and Windows had hidden my installer too.
 
-**When "we can't tell" must mean "no".** Enrollment checks that the key does
-not release its secret without a PIN. On my key that check was sometimes
-inconclusive. At first we accepted the only clean result we could get.
+**When "we can't tell" must mean "no".** Enrollment checks that a client
+without PIN verification cannot obtain the same derived output. On my key
+that check was sometimes inconclusive. At first we accepted the only clean
+result we could get.
 In a later version the rule became strict: an inconclusive result rejects
 the key. Writing that rule takes one line of code; deciding it is a security
 judgement, and that is the part that stayed with me.

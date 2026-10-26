@@ -126,7 +126,7 @@ Successful sign-in alone does not prove hardware protection against requests wit
 
 The Windows password provider remains available. Provider removal preserves vault data. Compatible backups preserve current revocations and counters and do not restore obsolete password generations. They are not complete disaster recovery.
 
-For a non-technical summary of the benefits, the unlock workflow and why it is secure, see the [benefits and security overview](docs/security-overview.md).
+For a non-technical summary of the benefits, the unlock workflow, protections and limits, see the [benefits and security overview](docs/security-overview.md).
 
 Read the [security model](SECURITY.md) and [recovery instructions](docs/recovery.md) before enabling the provider. Distribution requires a real certificate and a validated [signing procedure](docs/signing.md).
 

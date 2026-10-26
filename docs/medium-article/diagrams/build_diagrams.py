@@ -85,7 +85,7 @@ def architecture():
     b.append(text(122, 240, 'manage', 14, 400, MUTED))
     b.append(text(122, 450, 'sign in', 14, 600, ACCENT))
     b.append(text(560, 158, 'runs', 14, 400, MUTED, 'middle'))
-    b.append(text(874, 604, 'protected password, single use', 14, 600, ACCENT))
+    b.append(text(874, 604, 'CredProtect-protected password', 14, 600, ACCENT))
     for i, line in enumerate(['Once, as administrator: enroll two', 'keys, store the password, install.']):
         b.append(text(240, 262 + 22 * i, line, 14.5, 400, MUTED))
     for i, line in enumerate(['Every sign-in: key PIN and a touch;', 'the Windows password is never typed.']):
@@ -105,8 +105,8 @@ def sequence():
     top, step, first = 110, 52, 196
     rows = 16
     bottom = first + step * (rows - 1) + 40
-    b = [text(40, 48, 'Sixteen steps: without key, PIN and touch the vault stays closed', 24, 600)]
-    b.append(text(40, 80, 'Solid arrows are requests, dashed arrows are answers. About 2.5 seconds end to end.', 16, 400, MUTED))
+    b = [text(40, 48, 'Sixteen steps from key verification to Windows authentication', 24, 600)]
+    b.append(text(40, 80, 'Solid arrows are requests, dashed arrows are answers. Timing varies with the device and touch.', 16, 400, MUTED))
     for x, (name, sub) in zip(xs, lanes):
         b.append(f'<line x1="{x}" y1="{top + 56}" x2="{x}" y2="{bottom}" stroke="{GRID}" stroke-width="1.4" stroke-dasharray="5 5"/>')
         b.append(f'<rect x="{x - 80}" y="{top}" width="160" height="56" rx="10" fill="#ffffff" stroke="{LINE}" stroke-width="1.4"/>')
@@ -121,19 +121,19 @@ def sequence():
         (You, Screen, '1  Enter key PIN, Sign in', False, False),
         (Screen, Prov, '2  Ask for a credential', False, False),
         (Prov, Prov, '3  Local checks first', False, False),
-        (Prov, Key, '4  Fresh encrypted channel (ECDH)', False, False),
-        (Prov, Key, '5  PIN, encrypted', False, False),
-        (Key, Prov, '6  PIN token', True, False),
-        (Prov, Key, '7  New challenge + salt', False, False),
+        (Prov, Key, '4  Fresh ECDH shared secret', False, False),
+        (Prov, Key, '5  Encrypted PIN hash', False, False),
+        (Key, Prov, '6  Encrypted PIN token', True, False),
+        (Prov, Key, '7  Challenge + encrypted salt', False, False),
         (You, Key, '8  Touch the key', False, True),
-        (Key, Prov, '9  Signature + secret', True, False),
+        (Key, Prov, '9  Signed answer + encrypted output', True, False),
         (Prov, Prov, '10  Verify signature, PIN, touch, counter', False, False),
-        (Prov, Vault, '11  Secret unwraps the data key', False, False),
-        (Prov, Vault, '12  Save the new counter', False, False),
+        (Prov, Vault, '11  Derived output unwraps data key', False, False),
+        (Prov, Vault, '12  Persist verified counter', False, False),
         (Vault, Prov, '13  Password, memory only', True, False),
-        (Prov, Screen, '14  Single-use credential', True, False),
+        (Prov, Screen, '14  Protected password serialization', True, False),
         (Screen, Win, '15  Standard password check', False, False),
-        (Win, Screen, '16  Access granted', True, True),
+        (Win, Screen, '16  Access granted or refused', True, True),
     ]
     for i, (a, c, label, answer, hot) in enumerate(steps):
         y = first + step * i
@@ -160,8 +160,8 @@ def vault():
     b.append(text(40, 80, 'One random data key encrypts the password; each security key wraps that same data key.', 16, 400, MUTED))
     b.append(f'<rect x="385" y="105" width="815" height="330" rx="14" fill="{BAND}" stroke="{LINE}" stroke-width="1.2" stroke-dasharray="7 6"/>')
     b.append(text(405, 134, 'Machine vault (vault.bin) - SYSTEM and Administrators only', 15, 600, MUTED))
-    b.append(box(40, 150, 260, 100, 'Primary security key', ['hmac-secret stays inside', 'gives a per-key secret']))
-    b.append(box(40, 300, 260, 100, 'Backup security key', ['hmac-secret stays inside', 'gives a per-key secret']))
+    b.append(box(40, 150, 260, 100, 'Primary security key', ['internal root stays inside', 'returns derived output']))
+    b.append(box(40, 300, 260, 100, 'Backup security key', ['internal root stays inside', 'returns derived output']))
     b.append(box(415, 160, 240, 80, 'Wrapped data key #1', ['HKDF + AES-256-GCM']))
     b.append(box(415, 310, 240, 80, 'Wrapped data key #2', ['HKDF + AES-256-GCM']))
     b.append(box(720, 230, 200, 90, 'Data key', ['256-bit, random'], accent=True))
