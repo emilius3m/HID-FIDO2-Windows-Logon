@@ -1,0 +1,11 @@
+#include <windows.h>
+101 DIALOGEX 0, 0, 300, 104
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Nome della chiave"
+FONT 10, "Segoe UI"
+BEGIN
+    LTEXT "Scegli un nome riconoscibile, per esempio Riserva 2.", -1, 12, 12, 278, 26
+    EDITTEXT 1001, 12, 40, 276, 18, ES_AUTOHSCROLL
+    DEFPUSHBUTTON "Continua", IDOK, 138, 73, 72, 22
+    PUSHBUTTON "Annulla", IDCANCEL, 216, 73, 72, 22
+END

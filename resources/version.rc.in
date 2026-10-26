@@ -1,0 +1,34 @@
+// Generated per target by hidfido_resources() in CMakeLists.txt.
+#pragma code_page(65001)
+#include <winver.h>
+
+@HIDFIDO_ICON_LINE@
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE @HIDFIDO_FILE_TYPE@
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041004B0"
+        BEGIN
+            VALUE "CompanyName", "HID-FIDO2-WinLogon (progetto open source)"
+            VALUE "FileDescription", "@HIDFIDO_FILE_DESCRIPTION@"
+            VALUE "FileVersion", "@PROJECT_VERSION@"
+            VALUE "InternalName", "@HIDFIDO_TARGET@"
+            VALUE "LegalCopyright", "Licenza MIT"
+            VALUE "OriginalFilename", "@HIDFIDO_FILE_NAME@"
+            VALUE "ProductName", "HID-FIDO2-WinLogon"
+            VALUE "ProductVersion", "@PROJECT_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0410, 1200
+    END
+END
