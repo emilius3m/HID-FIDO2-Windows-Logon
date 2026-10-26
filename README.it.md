@@ -157,6 +157,9 @@ conserva l'archivio. Le copie compatibili preservano revoche e contatori
 correnti e non ripristinano vecchie generazioni della password. Non sostituiscono
 un recupero completo del computer.
 
+Una sintesi in inglese di vantaggi, passaggi dello sblocco e motivi di sicurezza è in
+[benefits and security overview](docs/security-overview.md).
+
 Prima dell'attivazione leggi [modello di sicurezza](SECURITY.md) e
 [istruzioni di recupero](docs/recovery.md). Per distribuire il software servono
 un certificato reale e una [procedura di firma](docs/signing.md) convalidata.
