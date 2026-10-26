@@ -3,6 +3,7 @@
 #include "hidfido/machine_vault.hpp"
 #include "hidfido/provider_ids.hpp"
 #include "hidfido/account.hpp"
+#include "hidfido/localization.hpp"
 
 #include <windows.h>
 #include <initguid.h>
@@ -372,16 +373,16 @@ void check_tile(ICredentialProvider* provider, DWORD index, PCWSTR expected_sid,
     require(credential->GetBitmapValue(0, nullptr) == E_POINTER, "Null bitmap output accepted");
     require(credential->GetFieldState(0, nullptr, nullptr) == E_POINTER, "Null state output accepted");
     if (suspended) {
-        require(string_value(credential.Get(), status_field).find(L"sospeso") != std::wstring::npos,
+        require(string_value(credential.Get(), status_field).find(hidfido::ui::tr(L"Accesso con la chiave sospeso: la password Windows va aggiornata con hid-fido2-vault --update-password.")) != std::wstring::npos,
                 "Suspension not shown");
         // A suspended record is refused before the PIN can reach any key.
-        check_refusal(credential.Get(), L"1234", L"sospeso");
+        check_refusal(credential.Get(), L"1234", hidfido::ui::tr(L"Accesso con la chiave sospeso: la password Windows va aggiornata con hid-fido2-vault --update-password."));
     } else {
-        check_refusal(credential.Get(), nullptr, L"Inserisci il PIN");
-        check_refusal(credential.Get(), L"12", L"Formato PIN non valido");
+        check_refusal(credential.Get(), nullptr, hidfido::ui::tr(L"Inserisci il PIN FIDO2 della chiave."));
+        check_refusal(credential.Get(), L"12", hidfido::ui::tr(L"Formato PIN non valido (almeno 4 caratteri). Nessun tentativo è stato inviato alla chiave."));
         succeeds(credential->SetStringValue(pin_field, L"9876"), "PIN field rejected");
         succeeds(credential->SetDeselected(), "Deselection failed");
-        check_refusal(credential.Get(), nullptr, L"Inserisci il PIN");
+        check_refusal(credential.Get(), nullptr, hidfido::ui::tr(L"Inserisci il PIN FIDO2 della chiave."));
     }
 }
 
@@ -537,7 +538,7 @@ void run(GetClass get_class, CanUnload can_unload, const TestVault& vault_files)
     provider.Reset();
     users.Reset();
     require(can_unload() == S_FALSE, "Outstanding credential not counted in DLL lifetime");
-    check_refusal(retained.Get(), nullptr, L"Inserisci il PIN");
+    check_refusal(retained.Get(), nullptr, hidfido::ui::tr(L"Inserisci il PIN FIDO2 della chiave."));
     retained.Reset();
     succeeds(can_unload(), "DLL references leaked");
     const auto final_vault = hidfido::vault::load(vault_files.path);
@@ -619,7 +620,8 @@ void run_connected(GetClass get_class, CanUnload can_unload, const TestVault& va
     const auto complete = [&](ICredentialProviderCredential* credential, bool expected) {
         pump_until([&] {
             const auto text = string_value(credential, status_field);
-            return text.find(L"in corso") == std::wstring::npos && text.find(L"Tocca") == std::wstring::npos;
+            return text != hidfido::ui::tr(L"Verifica della chiave in corso. Tocca la chiave quando lampeggia.") &&
+                   text != hidfido::ui::tr(L"Tocca la chiave quando lampeggia.");
         });
         // Dispatch the completion message as well as any preceding status update.
         MSG message{};
@@ -647,7 +649,7 @@ void run_connected(GetClass get_class, CanUnload can_unload, const TestVault& va
         serialization(credential.Get(), false);
         result(credential.Get());
         require(vault::load(vault_files.path).find("S-1-5-21-111-222-333-1001")->stale, "Password rejection not persisted");
-        check_refusal(credential.Get(), L"1234", L"sospeso");
+        check_refusal(credential.Get(), L"1234", hidfido::ui::tr(L"Accesso con la chiave sospeso: la password Windows va aggiornata con hid-fido2-vault --update-password."));
     }
     {
         reset(); auto credential = tile();
@@ -656,7 +658,7 @@ void run_connected(GetClass get_class, CanUnload can_unload, const TestVault& va
         SetEnvironmentVariableW(L"HIDFIDO_TEST_SUSPEND_FAIL", L"1");
         result(credential.Get());
         require(!vault::load(vault_files.path).find("S-1-5-21-111-222-333-1001")->stale, "Synthetic write failure changed vault");
-        check_refusal(credential.Get(), L"1234", L"sospeso");
+        check_refusal(credential.Get(), L"1234", hidfido::ui::tr(L"Accesso con la chiave sospeso: la password Windows va aggiornata con hid-fido2-vault --update-password."));
     }
     {
         reset(); auto credential = tile();
@@ -815,6 +817,7 @@ void run_connected(GetClass get_class, CanUnload can_unload, const TestVault& va
 }
 
 int wmain(int argc, wchar_t** argv) {
+    hidfido::ui::set_language(hidfido::ui::preferred_language());
     if (argc != 2) {
         std::cerr << "Usage: provider_tests <absolute-provider-dll-path>\n";
         return 2;

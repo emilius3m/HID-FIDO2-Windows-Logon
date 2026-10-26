@@ -1,3 +1,4 @@
+#include "hidfido/localization.hpp"
 #include "hidfido/secret_dialog.hpp"
 #include "hidfido/pin_text.hpp"
 
@@ -9,6 +10,7 @@
 
 namespace hidfido::ui {
 namespace {
+using hidfido::ui::tr;
 using password::SecureBytes;
 
 struct Dialog {
@@ -113,9 +115,9 @@ LRESULT CALLBACK dialog_window(HWND window, UINT message, WPARAM wparam, LPARAM 
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_PASSWORD | ES_AUTOHSCROLL,
             0, 0, 0, 0, window, reinterpret_cast<HMENU>(101), nullptr, nullptr);
         SendMessageW(state->edit, EM_SETLIMITTEXT, state->max_units, 0);
-        state->ok = CreateWindowW(L"BUTTON", L"Continua", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+        state->ok = CreateWindowW(L"BUTTON", tr(L"Continua"), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
             0, 0, 0, 0, window, reinterpret_cast<HMENU>(IDOK), nullptr, nullptr);
-        state->cancel = CreateWindowW(L"BUTTON", L"Annulla", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+        state->cancel = CreateWindowW(L"BUTTON", tr(L"Annulla"), WS_CHILD | WS_VISIBLE | WS_TABSTOP,
             0, 0, 0, 0, window, reinterpret_cast<HMENU>(IDCANCEL), nullptr, nullptr);
         state->dpi = GetDpiForWindow(window);
         apply_font(*state);
@@ -213,7 +215,7 @@ std::optional<SecureBytes> prompt_secret(const wchar_t* title, const wchar_t* in
     Dialog state;
     state.instructions = instructions;
     state.max_units = max_units;
-    state.format_error = L"Inserimento non valido o troppo lungo.";
+    state.format_error = tr(L"Inserimento non valido o troppo lungo.");
     return run(title, state);
 }
 
@@ -234,8 +236,7 @@ std::optional<SecureBytes> request_fido_pin(const wchar_t* title, const wchar_t*
                                             typed.size() / sizeof(wchar_t));
         return pin::utf8_from_typed(text);
     };
-    state.format_error = L"Formato PIN non valido: usare almeno 4 caratteri e massimo 63 byte UTF-8.\n"
-                         L"Nessun tentativo è stato inviato alla chiave.";
+    state.format_error = tr(L"Formato PIN non valido: usare almeno 4 caratteri e massimo 63 byte UTF-8.\nNessun tentativo è stato inviato alla chiave.");
     return run(title, state);
 }
 }

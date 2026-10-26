@@ -89,7 +89,7 @@ void results() {
                                             std::pair{code(0xC000006E), code(0xC0000071)}}) {
         const auto advice = logon::advise_logon_result(status, substatus);
         require(!advice.success && advice.suspend_record, "Password rejection must suspend the record");
-        require(advice.message.find(L"--update-password") != std::wstring::npos, "Missing update instructions");
+        require(advice.message.find(L"password") != std::wstring::npos && advice.message.find(L"--update-password") == std::wstring::npos, "Missing user-facing password recovery instructions");
     }
     for (const auto& [status, substatus] : {std::pair{code(0xC0000234), 0},
                                             std::pair{code(0xC0000072), 0},

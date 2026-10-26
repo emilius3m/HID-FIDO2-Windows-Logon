@@ -1,3 +1,4 @@
+#include "hidfido/localization.hpp"
 // SPDX-License-Identifier: MIT
 // Original implementation using the documented Windows Credential Provider V2 ABI.
 // A tile is offered only for local accounts enrolled in the machine vault. On
@@ -40,6 +41,7 @@
 #include <vector>
 
 namespace {
+using hidfido::ui::tr;
 using Microsoft::WRL::ComPtr;
 using hidfido::password::SecureBytes;
 namespace vault = hidfido::vault;
@@ -169,23 +171,23 @@ constexpr ULONGLONG cache_lifetime_ms = 15000;
 
 LocalAccount local_account(PCWSTR sid) {
     PSID binary = nullptr;
-    if (!ConvertStringSidToSidW(sid, &binary)) throw Refusal{L"Identità dell'account non valida."};
+    if (!ConvertStringSidToSidW(sid, &binary)) throw Refusal{tr(L"Identità dell'account non valida.")};
     wchar_t name[257]{}, domain[257]{}, computer[MAX_COMPUTERNAME_LENGTH + 1]{};
     DWORD name_size = 257, domain_size = 257, computer_size = MAX_COMPUTERNAME_LENGTH + 1;
     SID_NAME_USE use{};
     const BOOL found = LookupAccountSidW(nullptr, binary, name, &name_size, domain, &domain_size, &use);
     LocalFree(binary);
-    if (!found || use != SidTypeUser) throw Refusal{L"Account Windows non trovato."};
+    if (!found || use != SidTypeUser) throw Refusal{tr(L"Account Windows non trovato.")};
     if (!GetComputerNameW(computer, &computer_size) ||
         CompareStringOrdinal(domain, -1, computer, -1, TRUE) != CSTR_EQUAL) {
-        throw Refusal{L"Solo gli account locali di questo computer sono supportati."};
+        throw Refusal{tr(L"Solo gli account locali di questo computer sono supportati.")};
     }
     return {computer, name};
 }
 
 ULONG negotiate_package() {
     HANDLE lsa = nullptr;
-    if (LsaConnectUntrusted(&lsa) < 0) throw Refusal{L"Servizio di autenticazione di Windows non disponibile."};
+    if (LsaConnectUntrusted(&lsa) < 0) throw Refusal{tr(L"Servizio di autenticazione di Windows non disponibile.")};
     char name_text[] = "Negotiate";
     LSA_STRING name{};
     name.Buffer = name_text;
@@ -194,7 +196,7 @@ ULONG negotiate_package() {
     ULONG package = 0;
     const NTSTATUS status = LsaLookupAuthenticationPackage(lsa, &name, &package);
     LsaDeregisterLogonProcess(lsa);
-    if (status < 0) throw Refusal{L"Pacchetto di autenticazione Windows non disponibile."};
+    if (status < 0) throw Refusal{tr(L"Pacchetto di autenticazione Windows non disponibile.")};
     return package;
 }
 
@@ -224,7 +226,7 @@ public:
     Credential(PWSTR owned_sid, CREDENTIAL_PROVIDER_USAGE_SCENARIO scenario, bool suspended,
                std::shared_ptr<Notifications> notifications)
         : sid_(owned_sid), scenario_(scenario), suspended_(suspended),
-          status_text_(suspended ? suspended_text : ready_text), notifications_(std::move(notifications)) {}
+          status_text_(suspended ? tr(suspended_text) : tr(ready_text)), notifications_(std::move(notifications)) {}
     ~Credential() { CoTaskMemFree(sid_); }
 
     IFACEMETHODIMP QueryInterface(REFIID iid, void** output) override {
@@ -309,7 +311,7 @@ public:
             std::lock_guard lock(state_mutex_);
             return copy_string(status_text_.c_str(), output);
         }
-        return copy_string(fields[id].text, output);
+        return copy_string(tr(fields[id].text), output);
     }
     IFACEMETHODIMP GetBitmapValue(DWORD id, HBITMAP* output) override {
         if (!output) return E_POINTER;
@@ -446,7 +448,7 @@ public:
                 discard_cache_locked(CacheDiscard::expired);
                 cached_ = SecureBytes{};
                 cached_identity_.reset();
-                status_text_ = L"Verifica scaduta: inserisci nuovamente il PIN e premi Accedi.";
+                status_text_ = tr(L"Verifica scaduta: inserisci nuovamente il PIN e premi Accedi.");
             }
             if (!cached_.size() || !cached_identity_ || cancelled_) {
                 if (connecting_ || pending_identity_) {
@@ -454,8 +456,8 @@ public:
                     *icon = CPSI_NONE;
                     return copy_string(status_text_.c_str(), text);
                 }
-                if (suspended_) status_text_ = suspended_text;
-                else if (pin_.size() == 0) status_text_ = L"Inserisci il PIN FIDO2 della chiave.";
+                if (suspended_) status_text_ = tr(suspended_text);
+                else if (pin_.size() == 0) status_text_ = tr(L"Inserisci il PIN FIDO2 della chiave.");
                 else {
                     // Format is checked locally before scheduling any key I/O.
                     try {
@@ -464,17 +466,17 @@ public:
                         auto checked = hidfido::pin::utf8_from_typed(units);
                     } catch (...) {
                         pin_ = SecureBytes{};
-                        status_text_ = pin_format_text;
+                        status_text_ = tr(pin_format_text);
                         return copy_string(status_text_.c_str(), text);
                     }
                     if (!notifications_->available()) {
                         pin_ = SecureBytes{};
-                        status_text_ = L"Interfaccia di accesso non pronta. Seleziona nuovamente l'opzione chiave.";
+                        status_text_ = tr(L"Interfaccia di accesso non pronta. Seleziona nuovamente l'opzione chiave.");
                     } else {
                         auto typed = std::move(pin_);
                         connecting_ = true;
                         cancelled_ = false;
-                        status_text_ = L"Verifica della chiave in corso. Tocca la chiave quando lampeggia.";
+                        status_text_ = tr(L"Verifica della chiave in corso. Tocca la chiave quando lampeggia.");
                         diagnostic::write(DiagnosticStage::serialization_start, state_flags_locked());
                         try {
                             start_worker(std::move(typed));
@@ -588,7 +590,7 @@ public:
                 }
             }
             if (advice.success) {
-                set_status(ready_text);
+                set_status(tr(ready_text));
                 return S_OK;
             }
             auto message = advice.message;
@@ -596,7 +598,7 @@ public:
                 try {
                     suspend_record(*sent);
                 } catch (...) {
-                    message += L" Impossibile sospendere l'archivio: non riprovare con la chiave.";
+                    message += tr(L" Impossibile sospendere l'archivio: non riprovare con la chiave.");
                 }
             }
             *icon = CPSI_ERROR;
@@ -637,7 +639,7 @@ private:
         discard_cache_locked(CacheDiscard::expired);
         cached_ = SecureBytes{};
         cached_identity_.reset();
-        status_text_ = L"Verifica scaduta: inserisci nuovamente il PIN e premi Accedi.";
+        status_text_ = tr(L"Verifica scaduta: inserisci nuovamente il PIN e premi Accedi.");
         return true;
     }
     struct Worker {
@@ -685,13 +687,13 @@ private:
             auto packed = authenticate(package, identity, keep_going, std::move(typed));
             require_continue(keep_going);
             std::lock_guard lock(state_mutex_);
-            if (cancelled_) throw Refusal{L"Operazione annullata."};
+            if (cancelled_) throw Refusal{tr(L"Operazione annullata.")};
             cached_ = std::move(packed);
             ui_handoff_ = false;
             cached_package_ = package;
             cached_identity_ = std::move(identity);
             cache_deadline_ = GetTickCount64() + cache_lifetime_ms;
-            status_text_ = L"Verifica chiave completata; invio a Windows.";
+            status_text_ = tr(L"Verifica chiave completata; invio a Windows.");
             diagnostic::write(DiagnosticStage::cache_ready, state_flags_locked());
             diagnostic::write(DiagnosticStage::worker_ready, package);
         } catch (const Refusal& refusal) {
@@ -706,7 +708,7 @@ private:
             try { set_status(hidfido::ui::describe_failure(error)); } catch (...) {}
         } catch (...) {
             diagnostic::write(DiagnosticStage::worker_error, 4);
-            set_status(L"Verifica della chiave non riuscita.");
+            set_status(tr(L"Verifica della chiave non riuscita."));
         }
         typed.clear();
         // No later operation in the old worker may cancel a new attempt.
@@ -725,16 +727,16 @@ private:
         require_continue(keep_going);
         {
             std::lock_guard lock(state_mutex_);
-            if (suspended_) throw Refusal{suspended_text};
+            if (suspended_) throw Refusal{tr(suspended_text)};
         }
-        if (typed.size() == 0) throw Refusal{L"Inserisci il PIN FIDO2 della chiave."};
+        if (typed.size() == 0) throw Refusal{tr(L"Inserisci il PIN FIDO2 della chiave.")};
         SecureBytes pin_utf8;
         try {
             const std::span<const wchar_t> units(reinterpret_cast<const wchar_t*>(typed.bytes().data()),
                                                  typed.size() / sizeof(wchar_t));
             pin_utf8 = hidfido::pin::utf8_from_typed(units);
         } catch (const std::exception&) {
-            throw Refusal{pin_format_text};
+            throw Refusal{tr(pin_format_text)};
         }
         typed = SecureBytes{};
 
@@ -744,11 +746,11 @@ private:
         diagnostic::write(DiagnosticStage::vault_snapshot);
         auto snapshot = read_vault();
         auto* found = snapshot.find(sid);
-        if (!found) throw Refusal{L"Nessuna chiave registrata per questo account."};
+        if (!found) throw Refusal{tr(L"Nessuna chiave registrata per questo account.")};
         auto record = *found;
         if (record.stale) {
             { std::lock_guard lock(state_mutex_); suspended_ = true; }
-            throw Refusal{suspended_text};
+            throw Refusal{tr(suspended_text)};
         }
         const auto before = record;
         identity = {record.sid, record.record_id, record.password_generation};
@@ -759,10 +761,10 @@ private:
         const auto account = local_account(sid_);
         package = negotiate_package();
         const auto devices = hidfido::ctap::enumerate_fido_hid();
-        if (devices.empty()) throw Refusal{L"Collega la chiave FIDO2 (Principale o Riserva)."};
-        if (devices.size() != 1) throw Refusal{L"Collega una sola chiave FIDO2."};
+        if (devices.empty()) throw Refusal{tr(L"Collega la chiave FIDO2 (Principale o Riserva).")};
+        if (devices.size() != 1) throw Refusal{tr(L"Collega una sola chiave FIDO2.")};
 
-        set_status(L"Tocca la chiave quando lampeggia.");
+        set_status(tr(L"Tocca la chiave quando lampeggia."));
         require_continue(keep_going);
         auto transport = hidfido::ctap::open_hid_transport(devices.front(), std::chrono::seconds(60), 3, keep_going);
         hidfido::ctap::HmacClient client(*transport);
@@ -831,12 +833,12 @@ private:
     void persist_counters(const vault::AccountRecord& before, const vault::AccountRecord& verified,
                            std::size_t wrapper_index) {
         const auto location = vault_location();
-        if (!location) throw Refusal{L"Archivio macchina non disponibile."};
+        if (!location) throw Refusal{tr(L"Archivio macchina non disponibile.")};
         vault::Lock lock(location->path, location->sddl);
         auto current = vault::load(location->path);
         auto* record = current.find(before.sid);
         if (!record) {
-            throw Refusal{L"L'archivio è cambiato durante l'accesso. Riprova."};
+            throw Refusal{tr(L"L'archivio è cambiato durante l'accesso. Riprova.")};
         }
         vault::apply_verified_key_use(*record, before, verified, wrapper_index);
         vault::save(location->path, current, location->sddl);
@@ -1006,7 +1008,7 @@ public:
         descriptor->dwFieldID = index;
         descriptor->cpft = fields[index].type;
         descriptor->guidFieldType = fields[index].purpose;
-        const HRESULT result = copy_string(fields[index].text, &descriptor->pszLabel);
+        const HRESULT result = copy_string(tr(fields[index].text), &descriptor->pszLabel);
         if (FAILED(result)) {
             CoTaskMemFree(descriptor);
             return result;
@@ -1250,6 +1252,7 @@ extern "C" HRESULT STDAPICALLTYPE DllGetClassObject(REFCLSID clsid, REFIID iid, 
     if (!output) return E_POINTER;
     *output = nullptr;
     if (clsid != hidfido::credential_provider_clsid) return CLASS_E_CLASSNOTAVAILABLE;
+    hidfido::ui::set_language(hidfido::ui::preferred_language());
     auto* factory = new(std::nothrow) ClassFactory;
     if (!factory) return E_OUTOFMEMORY;
     const HRESULT result = factory->QueryInterface(iid, output);

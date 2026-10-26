@@ -26,6 +26,17 @@ machine vault and direct CTAP2 USB HID access, without a browser or the
 Windows WebAuthn dialog in LogonUI. Its COM interface submits standard
 Windows password serialization; it is not an authentication authority.
 
+## Interface language
+
+The shared UI catalog contains Italian and English text. The manager stores
+only the selected language (`it` or `en`) in the 64-bit machine preference
+`HKLM\SOFTWARE\HID-FIDO2-WinLogon\Preferences\Language`. This value affects
+presentation only; it is not used for authentication, key authorization or
+vault parsing. A missing or invalid value falls back to the Windows display
+language for Italian, otherwise English. Helpers receive `--language it|en`
+explicitly; key labels and machine-readable reports are not translated.
+The sign-in DLL reads this preference outside `DllMain` and never writes it.
+
 ## Cryptographic flow
 
 Enrollment creates a dedicated ES256 credential with `hmac-secret`, verifies

@@ -1,4 +1,5 @@
 #include "hidfido/native_management.hpp"
+#include "hidfido/localization.hpp"
 #include <windows.h>
 #include <algorithm>
 #include <limits>
@@ -77,6 +78,7 @@ std::vector<std::wstring> vault_arguments(VaultAction action, std::wstring_view 
         if (action == VaultAction::restore && !valid_id(narrow(selection), 32)) throw std::runtime_error("Invalid backup selection");
         result.emplace_back(selection);
     }
+    result.emplace_back(L"--language"); result.emplace_back(ui::language_code(ui::language()));
     result.emplace_back(L"--expected-sid"); result.emplace_back(sid); return result;
 }
 TransactionResult transact(TransactionBackend& backend, bool previous) {

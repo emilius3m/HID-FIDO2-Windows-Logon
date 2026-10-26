@@ -1,4 +1,5 @@
 #include "hidfido/native_management.hpp"
+#include "hidfido/localization.hpp"
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
@@ -22,6 +23,7 @@ void metadata_and_actions() {
         const auto selection = action == VaultAction::restore ? L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" : L"Riserva 2";
         const auto args = vault_arguments(action, selection, L"S-1-5-21-1-2-3-1001");
         check(args[0].starts_with(L"--") && args[args.size() - 2] == L"--expected-sid", "Native action vocabulary or SID binding lost");
+        check(args[args.size() - 4] == L"--language" && args[args.size() - 3] == hidfido::ui::language_code(hidfido::ui::language()), "Helper language was not propagated explicitly");
     }
     rejects([] { vault_arguments(VaultAction::restore, L"..\\arbitrary", L"S-1-5-21-1-2-3-1001"); }, "Arbitrary restore path accepted");
     rejects([] { vault_arguments(VaultAction::verify, std::wstring(L"key\0hidden", 10), L"sid"); }, "Command NUL accepted");

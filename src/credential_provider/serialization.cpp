@@ -1,3 +1,4 @@
+#include "hidfido/localization.hpp"
 #include "hidfido/logon_serialization.hpp"
 
 #include <windows.h>
@@ -10,6 +11,7 @@
 
 namespace hidfido::logon {
 namespace {
+using hidfido::ui::tr;
 // NTSTATUS values reported to ICredentialProviderCredential::ReportResult.
 constexpr std::int32_t status_no_such_user = static_cast<std::int32_t>(0xC0000064);
 constexpr std::int32_t status_wrong_password = static_cast<std::int32_t>(0xC000006A);
@@ -24,9 +26,8 @@ constexpr std::int32_t status_account_expired = static_cast<std::int32_t>(0xC000
 constexpr std::int32_t status_password_must_change = static_cast<std::int32_t>(0xC0000224);
 constexpr std::int32_t status_account_locked_out = static_cast<std::int32_t>(0xC0000234);
 
-constexpr wchar_t update_hint[] =
-    L" L'accesso con la chiave è sospeso: entra con la password Windows ed esegui "
-    L"hid-fido2-vault --update-password da un terminale amministratore.";
+const wchar_t* update_hint() { return
+    tr(L" L'accesso con la chiave è sospeso: entra con la password Windows ed esegui hid-fido2-vault --update-password da un terminale amministratore."); }
 
 void set_string(UNICODE_STRING& target, std::size_t offset, std::size_t bytes) {
     target.Length = static_cast<USHORT>(bytes);
@@ -120,29 +121,29 @@ ResultAdvice advise_logon_result(std::int32_t status, std::int32_t substatus) {
     if (status == status_password_expired || status == status_password_must_change ||
         (status == status_account_restriction && password_problem(substatus))) {
         advice.suspend_record = true;
-        advice.message = std::wstring(L"La password Windows è scaduta o deve essere cambiata: cambiala con l'opzione password standard.") + update_hint;
+        advice.message = std::wstring(tr(L"La password Windows è scaduta o deve essere cambiata: cambiala con l'opzione password standard.")) + update_hint();
         return advice;
     }
     if (status == status_wrong_password || (status == status_logon_failure && substatus != status_no_such_user)) {
         advice.suspend_record = true;
-        advice.message = std::wstring(L"Windows ha rifiutato la password memorizzata: probabilmente è stata cambiata.") + update_hint;
+        advice.message = std::wstring(tr(L"Windows ha rifiutato la password memorizzata: probabilmente è stata cambiata.")) + update_hint();
         return advice;
     }
     if (status == status_account_locked_out) {
-        advice.message = L"Account Windows bloccato per troppi tentativi. Attendi o rivolgiti a un amministratore.";
+        advice.message = tr(L"Account Windows bloccato per troppi tentativi. Attendi o rivolgiti a un amministratore.");
     } else if (status == status_account_disabled) {
-        advice.message = L"Account Windows disabilitato.";
+        advice.message = tr(L"Account Windows disabilitato.");
     } else if (status == status_account_expired) {
-        advice.message = L"Account Windows scaduto.";
+        advice.message = tr(L"Account Windows scaduto.");
     } else if (status == status_logon_type_not_granted) {
-        advice.message = L"L'account non ha il diritto di accesso locale a questo computer.";
+        advice.message = tr(L"L'account non ha il diritto di accesso locale a questo computer.");
     } else if (status == status_account_restriction &&
                (substatus == status_invalid_logon_hours || substatus == status_invalid_workstation)) {
-        advice.message = L"Accesso non consentito in questo orario o da questo computer.";
+        advice.message = tr(L"Accesso non consentito in questo orario o da questo computer.");
     } else if (status == status_logon_failure) {
-        advice.message = L"Account Windows non trovato.";
+        advice.message = tr(L"Account Windows non trovato.");
     } else {
-        advice.message = L"Accesso rifiutato da Windows (codice " + hex(status) + L").";
+        advice.message = tr(L"Accesso rifiutato da Windows (codice ") + hex(status) + L").";
     }
     return advice;
 }

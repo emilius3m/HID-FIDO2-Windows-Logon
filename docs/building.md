@@ -9,7 +9,15 @@
 
 The checked-in [CMake presets](../CMakePresets.json) configure the x64 Visual
 Studio generator. No third-party library or package manager is required.
-Python is optional and used only to regenerate the checked-in icon.
+Python is optional for regenerating documentation diagrams or the icon, and
+for the source-level localization check:
+
+```cmd
+python scripts\check-ui-localization.py
+```
+
+Translations are built into the binaries from `include/hidfido/strings.inc`;
+the installed app requires no Python or external language files.
 
 From a Developer Command Prompt:
 

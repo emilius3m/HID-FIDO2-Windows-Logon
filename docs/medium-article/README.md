@@ -5,6 +5,9 @@ coding agents. Its message: a project of this complexity would not exist
 without them, because the barrier was the knowledge each component required,
 not the typing.
 
+The story and copied manager screenshots describe version 0.6. Version 0.7
+adds the bilingual interface; see the repository READMEs for the current UI.
+
 | Path | Content |
 | --- | --- |
 | [`article.md`](article.md) | Title, subtitle and text (about 2,100 words, 8 minutes) |
