@@ -23,6 +23,34 @@ autenticazione Windows. Mantieni una password Windows funzionante per il recuper
 
 Versione attuale: **0.6.0**. L'interfaccia è in italiano.
 
+## Schermate di esempio
+
+Schermate del gestore nativo, acquisite dalla versione 0.6.0 in modalità
+`--demo`. Gli esempi usano dati fittizi e hanno le operazioni reali
+disabilitate: non mostrano credenziali o risultati di verifica hardware
+effettivi del computer.
+
+**Panoramica** — stato dell'accesso, chiavi registrate e istruzioni per lo sblocco Windows.
+
+![Panoramica del gestore HID FIDO2 con stato di esempio e istruzioni per sbloccare Windows](docs/images/manager-overview.png)
+
+<details>
+<summary>Gestione chiavi, password e recupero, installazione</summary>
+
+**Chiavi** — elenco delle chiavi e stato separato delle prove di protezione hardware.
+
+![Gestione delle chiavi con Principale e Riserva di esempio e stato della protezione hardware](docs/images/manager-keys.png)
+
+**Password e recupero** — aggiornamento della copia cifrata e gestione delle copie protette dell'archivio.
+
+![Pagina password e recupero con aggiornamento della copia cifrata e gestione delle copie protette](docs/images/manager-recovery.png)
+
+**Installazione** — stato del provider, installazione, rimozione e guida di recupero.
+
+![Pagina installazione con stato di esempio del provider e comandi di gestione nativi](docs/images/manager-installation.png)
+
+</details>
+
 ## Requisiti e ambito
 
 | Componente | Ambito supportato |
@@ -40,13 +68,17 @@ La versione non è certificata o pronta per una distribuzione generale in produz
 
 ## Installazione da un pacchetto pronto
 
+Scarica lo [ZIP di installazione Windows x64](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/download/v0.6.0/HID-FIDO2-Windows-Logon-0.6.0-x64.zip)
+e il relativo checksum SHA-256 dalla [Release v0.6.0](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/tag/v0.6.0).
+La release è un'anteprima sperimentale non firmata.
+
 Estrai l'intero ZIP di distribuzione e apri
 `app/Gestione-HID-FIDO2.exe`. L'eseguibile comprende gestore e installer
 nativi. Mantieni accanto `release.json` e la directory `bin`: il solo
 eseguibile non è sufficiente.
 
 Le distribuzioni locali sono conservate in `dist/`, esclusa dal controllo
-versione. Lo ZIP va pubblicato come allegato di una GitHub Release.
+versione. Gli ZIP sono pubblicati come allegati delle GitHub Release.
 
 ## Compilazione e test
 

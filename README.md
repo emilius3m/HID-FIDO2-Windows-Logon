@@ -18,6 +18,33 @@ Native C++ Windows application and Credential Provider for signing in to and unl
 
 Current version: **0.6.0**. The UI is currently in Italian.
 
+## Screenshots
+
+The native manager, captured from version 0.6.0 in `--demo` mode. These
+examples use synthetic data and have real operations disabled; they do not
+show a machine's actual credentials or hardware verification results.
+
+**Overview** — sign-in status, enrolled keys and instructions for Windows unlock.
+
+![Native HID FIDO2 manager overview in Italian, showing example sign-in status and unlock instructions](docs/images/manager-overview.png)
+
+<details>
+<summary>Key management, password recovery and installation</summary>
+
+**Security keys** — enrolled keys and their separate hardware protection checks.
+
+![Security key management with example primary and backup keys and hardware protection states](docs/images/manager-keys.png)
+
+**Password and recovery** — update the encrypted password copy and manage protected vault backups.
+
+![Password and recovery page with encrypted password update and protected backup controls](docs/images/manager-recovery.png)
+
+**Installation** — provider status, installation, removal and recovery guidance.
+
+![Installation page with example provider status and native deployment controls](docs/images/manager-installation.png)
+
+</details>
+
 ## Requirements and scope
 
 | Component | Supported scope |
@@ -32,13 +59,17 @@ HID Crescendo has been used during development. Other authenticators, Windows bu
 
 ## Install from a prepared package
 
+Download the [Windows x64 installation ZIP](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/download/v0.6.0/HID-FIDO2-Windows-Logon-0.6.0-x64.zip)
+and its SHA-256 checksum from [Release v0.6.0](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/tag/v0.6.0).
+This release is an experimental unsigned preview.
+
 Extract the complete distribution ZIP, then open
 `app/Gestione-HID-FIDO2.exe`. This executable contains both the native manager
 and the installer. Keep `release.json` and the `bin` directory beside it;
 copying only the executable is not sufficient.
 
 Locally prepared distributions are kept in `dist/`, excluded from source
-control. Publish the distribution ZIP as a GitHub Release asset.
+control. Distribution ZIPs are published as GitHub Release assets.
 
 ## Build and test
 
