@@ -193,7 +193,7 @@ def knowledge():
                                        'UAC and SID continuity', 'ETW TraceLogging']),
         ('Shipping it', ['Win32 UI and per-monitor DPI', 'manifests and visual styles', 'icons and version resources',
                          'package hashing and pinning', 'Authenticode and CMS signing', 'install, update, rollback',
-                         '18 automated test suites', 'recovery documentation']),
+                         '19 automated test suites', 'recovery documentation']),
     ]
     width, label_w, x0 = 1240, 230, 40
     y = 110
@@ -232,7 +232,7 @@ def cover():
          f'<rect x="{ox + 262}" y="{oy + 177}" width="18" height="26" fill="#ffffff"/>']
     b.append(text(540, 282, 'A STORY ABOUT CODING AGENTS', 22, 600, ACCENT))
     b.append(text(540, 356, 'One key, one PIN, one touch,', 50, 700))
-    b.append(text(540, 420, 'and 12,000 lines of C++', 50, 700))
+    b.append(text(540, 420, 'and 13,000 lines of C++', 50, 700))
     b.append(text(540, 486, 'FIDO2 sign-in for Windows that I could never', 25, 400, MUTED))
     b.append(text(540, 520, 'have built on my own.', 25, 400, MUTED))
     return svg(1400, 788, ''.join(b))

@@ -1,8 +1,8 @@
 # I Could Never Have Built This Alone
 
-## How coding agents turned "unlock Windows with a USB security key" from a fantasy into 12,000 lines of working C++
+## How coding agents turned "unlock Windows with a USB security key" from a fantasy into 13,000 lines of working C++
 
-![A blue key icon next to the text: One key, one PIN, one touch, and 12,000 lines of C++](images/cover.png)
+![A blue key icon next to the text: One key, one PIN, one touch, and 13,000 lines of C++](images/cover.png)
 
 I wanted something that sounded simple. Plug in my FIDO2 security key, type
 its PIN, touch it, and my Windows laptop unlocks. No password typed at the
@@ -13,8 +13,9 @@ Windows can already sign in with a security key, but only for accounts
 managed through Microsoft Entra ID. For a plain local account there is
 nothing built in. So I built it: an open-source credential provider called
 [HID FIDO2 Windows Logon](https://github.com/emilius3m/HID-FIDO2-Windows-Logon).
-Today it unlocks my machine in about two and a half seconds, most of which is
-the time it takes me to touch the key.
+During development, an earlier build unlocked my machine in about two and a
+half seconds, including the wait for my touch. That was an observation on my
+device; each new release still needs its own unlock and restart sign-in tests.
 
 I want to be honest about one thing from the start, because it is the real
 point of this article. **I could not have built this without coding
@@ -85,7 +86,7 @@ re-encrypted, and both keys keep working.
 ![Vault: the primary and backup security keys each unwrap their own copy of the data key, which decrypts the Windows password](images/vault-keys.png)
 *Either key opens the vault; neither key ever sees the password.*
 
-## Sixteen steps in two and a half seconds
+## Sixteen steps to unlock Windows
 
 This is what happens between pressing **Sign in** and seeing the desktop.
 
@@ -135,8 +136,9 @@ My part of the work:
   security.
 - **Being the hands.** Agents cannot touch a USB key, unplug it and plug it back
   in, press Win+L or watch an LED. Every hardware test needed me.
-- **Running anything privileged.** The agents built and tested as a normal
-  user; I ran the steps that needed administrator rights.
+- **Approving privileged changes.** The agents prepared the builds and
+  installer; changes to Windows sign-in needed my explicit approval and
+  administrator authorization.
 - **Keeping secrets out of the conversation.** One rule held from day one: my
   PIN and my Windows password never went into a chat window. The agents built
   small native dialogs so that secrets were typed only on my machine, into the
@@ -146,21 +148,22 @@ My part of the work:
 
 The agents' part was everything else: reading the specifications, writing the
 CBOR encoder and the USB framing, the PIN protocol, the vault format, the
-credential provider, the installer, eighteen automated test suites, the
+credential provider, the installer, nineteen automated test suites, the
 documentation, and even the diagrams in this article, which are generated
 from a short Python script.
 
-![The native manager window, Overview page, in Italian, showing key sign-in as active with two registered keys](images/screenshot-manager-overview.png)
-*The native manager in demo mode, with synthetic data. The interface is in Italian, my language.*
+![Version 0.7 manager Overview page in English, showing example key sign-in status and the language selector](images/screenshot-manager-overview.png)
+*Version 0.7 in English, using demo data. The language selector switches between English and Italian immediately.*
 
-![The Keys page listing the Primary and Backup keys with their PIN-protection status](images/screenshot-manager-keys.png)
-*Each key records whether its protection was verified on real hardware. A successful sign-in never upgrades that claim on its own.*
+![English Security keys page showing the sample key names Principale and Riserva, with separate security-check results](images/screenshot-manager-keys.png)
+*Each key records whether its PIN protection was checked. The sample key names stay unchanged when the interface language changes; a successful sign-in never upgrades a missing security check.*
 
-![A small dialog asking for the security key PIN, warning that no automatic retries are made](images/screenshot-pin-dialog.png)
-*Secrets are typed into small local dialogs, never into a console or a chat. A wrong PIN counts on the key, so the software never retries one.*
+![English Password and recovery page with saved-password updates, encrypted backups and lost-key guidance](images/screenshot-manager-recovery.png)
+*The manager explains how to update the saved password, create an encrypted backup and recover after losing a key. This capture uses demo data.*
 
-I can't show you the sign-in tile itself: Windows does not allow screenshots
-of the secure sign-in desktop.
+PINs and Windows passwords are entered in separate native dialogs. A wrong
+PIN counts on the key, so the software never retries one automatically. The
+screenshots here show the management app with real actions disabled.
 
 ## Stories from the bench
 
@@ -215,8 +218,18 @@ Halfway through, the project went through a complete rewrite. The first
 versions relied on PowerShell scripts for installation and management. Version
 0.6 replaced all of them with native C++: a native management window, a
 package that verifies its own hashes before and after asking for administrator
-rights, and no script interpreter anywhere. Today it is about 8,500 lines of
-C++ plus 3,900 lines of tests.
+rights, and no script interpreter anywhere. Version 0.7 added Italian and
+English with a saved language preference, and rewrote the interface text for
+someone using the product rather than developing it. Today it is about 8,900
+non-blank lines of C++, including the built-in translations, plus 3,900 lines
+of tests.
+
+![English Installation page in version 0.7, with install, update, removal and recovery controls](images/screenshot-manager-installation.png)
+*Installation and recovery are part of the native manager. The English preview keeps the same behavior and sample data as the Italian version.*
+
+The nineteen automated suites passed for version 0.7, and installation was
+checked on the development device. Those checks do not replace testing a real
+Windows unlock and sign-in after restart with that release.
 
 That rewrite is the best example of what changed for me. A rewrite of that
 size is something you simply don't attempt alone, on a project nobody pays you
