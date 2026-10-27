@@ -51,7 +51,7 @@ start /wait "" build\Release\Gestione-HID-FIDO2.exe --package "%CD%\build\Releas
 ```
 
 The native producer validates AMD64 PE inputs, rejects the test provider,
-computes hashes and creates `out\releases\0.6.0\<release-id>`. It verifies
+computes hashes and creates `out\releases\0.9.0\<release-id>`. It verifies
 the completed package and writes its directory to the requested JSON result.
 Existing result files are not overwritten: choose a new filename each time.
 
@@ -71,6 +71,37 @@ Demo mode uses synthetic data, disables real actions, does not elevate and
 does not read the machine vault. The verification command checks a local
 unsigned package without launching any payload or changing Windows settings.
 
+`--demo-compact` uses the minimum window size. `--wizard-step touch` (or
+`connect`, `pin`, `release`, `remove`, `reconnect`, `password`, `success`)
+previews the shared guided view with real actions and secret input disabled.
+Both options require `--demo`. See [screenshot reproduction](images/README.md).
+
+`CompactUserExperience` checks honest status selection and isolated setup
+preferences. `GuidedCeremonyIsolation` uses a hidden test-only UI build to
+check synthetic PIN normalization, secret-field clearing, cancellation and
+the distinction between hardware waits and user acknowledgements. Its input
+hooks are not compiled into the shipped vault helper. No key or Windows
+authentication is used by that test.
+
 For a signed distribution, configure the publisher pin and follow
 [signing](signing.md). A passing build is not authorization to install an
 experimental provider on another computer.
+
+## Optional live ETW checks (development only)
+
+`GuidedSetupAndSupport` normally tests the pure setup model, rename arguments
+and report privacy/size boundaries without creating an ETW session. To also
+test the actual Windows controller and TDH decoder, use an elevated Developer
+Command Prompt and new result filenames:
+
+```cmd
+build\Release\management_experience_tests.exe --etw-self-test "%CD%\out\etw-synthetic.json"
+build\Release\management_experience_tests.exe --etw-deadline-test "%CD%\out\etw-deadline.json"
+```
+
+The first check starts/stops collection twice and publishes synthetic numeric
+events plus deliberately excluded text. The second takes five minutes and
+checks automatic shutdown without a UI message loop. Neither uses a key,
+reads a password, changes provider registration or attempts authentication.
+They control a temporary session for this project's diagnostic provider only.
+The test executable is not a distribution payload.

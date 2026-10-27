@@ -913,6 +913,17 @@ void replace_password(AccountRecord& record, std::span<const std::uint8_t> data_
     record = std::move(updated);
 }
 
+void rename_wrapper(AccountRecord& record, std::wstring_view label, std::wstring new_label) {
+    if (!valid_label(new_label)) throw std::invalid_argument("Invalid key label");
+    const auto found = std::find_if(record.wrappers.begin(), record.wrappers.end(),
+        [&](const KeyWrapper& wrapper) { return wrapper.label == label; });
+    if (found == record.wrappers.end()) throw std::invalid_argument("No key with that label");
+    for (const auto& wrapper : record.wrappers) {
+        if (&wrapper != &*found && wrapper.label == new_label) throw std::invalid_argument("Key label already enrolled");
+    }
+    found->label = std::move(new_label);
+}
+
 void remove_wrapper(AccountRecord& record, std::wstring_view label) {
     const auto found = std::find_if(record.wrappers.begin(), record.wrappers.end(),
                                     [&](const KeyWrapper& wrapper) { return wrapper.label == label; });

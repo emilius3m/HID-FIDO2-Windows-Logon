@@ -22,9 +22,11 @@ def main():
         key, italian, english = values
         assert key not in catalog, f'Duplicate UI key: {key}'
         catalog[key] = italian, english
-    neutral = {'', 'HID FIDO2'}
+    neutral = {'', 'HID FIDO2', 'HID FIDO2 · 0.9.0'}
     sources = [ROOT / name for name in (
-        'src/manager/main.cpp', 'src/ui/secret_dialog.cpp', 'src/ui/user_messages.cpp',
+        'src/manager/main.cpp', 'src/manager/window.cpp', 'src/manager/experience.cpp',
+        'src/ui/guided_ceremony.cpp', 'include/hidfido/guidance_view.hpp',
+        'src/ui/secret_dialog.cpp', 'src/ui/user_messages.cpp',
         'src/vault/vault_tool.cpp', 'src/credential_provider/provider.cpp',
         'src/credential_provider/serialization.cpp')]
     checked = 0
@@ -35,9 +37,17 @@ def main():
             assert key in catalog or key in neutral, f'{source.name}: untranslated lookup {key}'
             checked += 1
         # These two blocks retain source keys for translation at display time.
-        if source.name == 'main.cpp':
+        if source.name == 'window.cpp':
             block = text[text.index('    void create() {'):text.index('    void layout() {')]
             neutral_here = neutral | {'BUTTON', 'Italiano', 'English'}
+            block += text[text.index('    void setup_state() {'):text.index('    void setup_action() {')]
+            block += text[text.index('const wchar_t* titles[]'):text.index('SetWindowTextW(heading_', text.index('const wchar_t* titles[]'))]
+        elif source.name == 'experience.cpp':
+            block = text[text.index('HomePresentation home_presentation'):text.index('std::string setup_trials_binding')]
+            neutral_here = neutral
+        elif source.name == 'guidance_view.hpp':
+            block = text[text.index('inline GuideCopy guide_copy'):text.index('inline bool guide_input')]
+            neutral_here = neutral
         elif source.name == 'provider.cpp':
             block = text[text.index('constexpr wchar_t ready_text'):text.index('// Key glyph')]
             neutral_here = neutral

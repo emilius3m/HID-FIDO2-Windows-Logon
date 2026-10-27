@@ -18,13 +18,63 @@ flowchart LR
 
 The manager handles status and orchestration. Interactive secret collection
 and FIDO2 operations run in the native vault helper. The manager captures
-only a bounded JSON metadata response from the dedicated status command.
+bounded JSON metadata from the dedicated status command and, only during
+an explicitly started support collection, allowlisted numeric diagnostics.
 It never receives the password/PIN buffers used by the interactive helper.
 
 The provider supports Windows logon and workstation unlock. It uses the
 machine vault and direct CTAP2 USB HID access, without a browser or the
 Windows WebAuthn dialog in LogonUI. Its COM interface submits standard
 Windows password serialization; it is not an authentication authority.
+
+## Setup and support
+
+The manager's `main.cpp` handles bootstrap and command-line modes;
+`window.cpp` implements the three-tab desktop interface. The pure
+`experience.cpp` model selects a truthful status and next action. Missing
+hardware checks and stale passwords are not presented as ready.
+
+The shared `GuidanceView` contains presentation only. In real interactive
+operations it lives in the vault helper, with a UI thread and a separate
+CTAP worker. Only that helper reads the masked secret field into erased
+buffers. Cancellation wakes input waiters and is polled during USB waits
+and HID requests; it does not undo work already committed. Connection,
+removal and CTAP responses drive their steps; the finger-release gesture
+requires explicit acknowledgement. PNG illustrations are embedded in the
+two executables and are not inputs to a security decision.
+
+The setup model derives the next step from observed status and user
+confirmations. Recovery acknowledgement is session-local. Windows-trial
+confirmations are presentation preferences under
+`HKCU\SOFTWARE\HID-FIDO2-WinLogon\UserInterface`, bound to a hash of public
+configuration state (password generation, key metadata and provider version/path).
+Malformed or obsolete preferences are ignored. No secrets or credential IDs
+are stored in those preferences. Successful sign-in or a checked UI box never creates a
+hardware protection proof. Existing enrollment, verification and deployment
+preconditions remain the authority for those operations.
+
+Renaming is a locked metadata update with account/key authority and selected
+label rechecks. The label is outside the authenticated encryption context;
+only that label changes. In-flight verified key use preserves a concurrent
+rename and still applies the normal counter/authority checks. Backups retain
+the current labels when restoring a compatible password payload.
+
+The manager controls a temporary real-time ETW session for the existing
+Credential Provider diagnostic GUID. TDH reads only `Stage`, `A` and `B` with
+fixed numeric sizes. Unknown stages and PIN-field UI events are discarded;
+raw event strings, process headers and payloads are not kept. A dedicated
+deadline thread stops collection after five minutes even while the manager
+UI is blocked. Stop/start and TDH decoding have a separate synthetic test;
+it does not submit Windows credentials or exercise LogonUI.
+The deadline runs in the manager process, not a background service: forced
+termination or a crash can leave its real-time ETW session until restart.
+This path has no persistent trace file and must not be described as a
+crash-resilient capture watchdog.
+
+Helper JSONL is bounded and reconstructed from fixed stage/error enums and
+numeric fields before report export. No generic status/exception serializer
+is used. The report adds only selected aggregate state, a read-only audit
+result and version information, with explicit preview and save.
 
 ## Interface language
 

@@ -122,6 +122,31 @@ void wrapper_management() {
             "Invalid SID accepted");
 }
 
+void rename_preserves_authority() {
+    Fixture f;
+    f.record.wrappers[0].protection_state = vault::ProtectionState::verified_distinct;
+    f.record.wrappers[0].protection_checked_at_unix = 123;
+    f.record.wrappers[0].protection_verification_version = 1;
+    const auto before = f.record;
+    vault::rename_wrapper(f.record, L"Principale", L"Chiave ufficio è");
+    auto expected = before; expected.wrappers[0].label = L"Chiave ufficio è";
+    require(vault::serialize(vault::Vault{{f.record}}) == vault::serialize(vault::Vault{{expected}}), "Rename changed data beyond the label");
+    auto key = vault::unwrap_data_key(f.record, f.record.wrappers[0], f.principale_secret);
+    require(same(vault::open_password(f.record, key.bytes()).bytes(), utf16(first_password)), "Rename made the key unusable");
+    vault::validate_backup_restore(f.record, before);
+    auto verified = before; ++verified.wrappers[0].credential.sign_count;
+    vault::apply_verified_key_use(f.record, before, verified, 0);
+    require(f.record.wrappers[0].label == L"Chiave ufficio è" && f.record.wrappers[0].credential.sign_count == verified.wrappers[0].credential.sign_count, "An in-flight assertion lost the rename or counter");
+    const auto unchanged = vault::serialize(vault::Vault{{f.record}});
+    for (const auto& invalid : {std::wstring{}, std::wstring(65, L'x'), std::wstring(L"bad\nname"), std::wstring(L"bad\0name", 8), std::wstring(1, 0xd800), std::wstring(L"Riserva")}) {
+        rejects([&] { vault::rename_wrapper(f.record, L"Chiave ufficio è", invalid); }, "Invalid/duplicate rename accepted");
+        require(vault::serialize(vault::Vault{{f.record}}) == unchanged, "Rejected rename modified the vault");
+    }
+    rejects([&] { vault::rename_wrapper(f.record, L"Principale", L"Nuova"); }, "Missing key renamed");
+    f.record.stale = true; vault::rename_wrapper(f.record, L"Riserva", L"Emergenza");
+    require(f.record.stale && f.record.password_generation == before.password_generation, "Rename reactivated an old password");
+}
+
 void unlock_order() {
     Fixture f;
     unsigned calls{};
@@ -437,6 +462,7 @@ int main() {
         two_independent_keys();
         password_change_keeps_wrappers();
         wrapper_management();
+        rename_preserves_authority();
         unlock_order();
         machine_security_policy();
         authority_cas();

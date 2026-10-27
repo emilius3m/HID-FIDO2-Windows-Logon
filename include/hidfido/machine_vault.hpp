@@ -166,6 +166,9 @@ void replace_password(AccountRecord& record, std::span<const std::uint8_t> data_
                       std::span<const std::uint8_t> password_utf16);
 // Refuses to remove the last wrapper.
 void remove_wrapper(AccountRecord& record, std::wstring_view label);
+// Metadata only: does not change credential IDs, counters, proof or envelopes.
+// The caller holds Lock and rechecks the selected key's current authority.
+void rename_wrapper(AccountRecord& record, std::wstring_view label, std::wstring new_label);
 
 // Thrown by a SecretSource when the attached authenticator does not hold the
 // wrapper's credential (CTAP2_ERR_NO_CREDENTIALS); unlock() tries the next one.

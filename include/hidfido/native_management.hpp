@@ -14,10 +14,23 @@ struct Status {
     std::wstring provider_version, provider_path;
     std::vector<Key> keys; std::vector<Backup> backups;
 };
-enum class VaultAction { enroll, verify, verify_protection, add_key, remove_key, update_password, backup, restore };
+enum class VaultAction { enroll, verify, verify_protection, add_key, remove_key, update_password, backup, restore, rename_key };
 Status parse_status(std::string_view data);
-std::vector<std::wstring> vault_arguments(VaultAction action, std::wstring_view selection, std::wstring_view sid);
+std::vector<std::wstring> vault_arguments(VaultAction action, std::wstring_view selection, std::wstring_view sid, std::wstring_view new_label = {});
 bool can_run(const Status& status, VaultAction action, bool busy, bool demo) noexcept;
+bool valid_key_label(std::wstring_view label) noexcept;
+enum class SetupStep { unavailable, recovery, primary, password, spare, protection, activation, trial, complete };
+// User confirmations are session-local guidance, never hardware/authentication proofs.
+struct SetupChecks { bool recovery{}, primary_unlock{}, spare_unlock{}, restart{}; };
+SetupStep setup_step(const Status& status, const SetupChecks& checks) noexcept;
+enum class HomeAction { setup, installation, password, keys, verify };
+struct HomePresentation { const wchar_t* heading; const wchar_t* detail; const wchar_t* action; HomeAction next; bool ready{}; };
+HomePresentation home_presentation(const Status& status) noexcept;
+// Presentation preferences only. Acknowledgements never authorize enrollment,
+// activate the provider or create hardware proofs. Recovery is never persisted.
+std::string setup_trials_binding(const Status& status);
+SetupChecks load_setup_trials(const Status& status) noexcept;
+bool save_setup_trials(const Status& status, const SetupChecks& checks) noexcept;
 bool valid_id(std::string_view value, std::size_t length) noexcept;
 std::wstring widen(std::string_view text);
 std::string narrow(std::wstring_view text);

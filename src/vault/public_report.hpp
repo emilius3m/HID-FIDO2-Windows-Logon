@@ -18,7 +18,8 @@ enum class Stage {
     windows_password_validation, token_identity, confirmation, hid_inventory,
     hid_open, key_enrollment, key_unlock, key_assertion, key_gate, key_remove,
     key_reinsert, non_uv_probe, secret_comparison, password_decryption,
-    ctap_info, ctap_make_credential, ctap_get_assertion, ctap_client_pin, ctap_other
+    ctap_info, ctap_make_credential, ctap_get_assertion, ctap_client_pin, ctap_other,
+    rename_key
 };
 enum class Error { none, cancelled, user, ctap, hid, windows_password, vault, conflict, other };
 
@@ -37,6 +38,7 @@ inline std::string_view name(Stage stage) noexcept {
         HIDFIDO_STAGE(key_reinsert); HIDFIDO_STAGE(non_uv_probe); HIDFIDO_STAGE(secret_comparison);
         HIDFIDO_STAGE(password_decryption); HIDFIDO_STAGE(ctap_info); HIDFIDO_STAGE(ctap_make_credential);
         HIDFIDO_STAGE(ctap_get_assertion); HIDFIDO_STAGE(ctap_client_pin); HIDFIDO_STAGE(ctap_other);
+        HIDFIDO_STAGE(rename_key);
 #undef HIDFIDO_STAGE
     }
     return "startup";

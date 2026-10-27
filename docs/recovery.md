@@ -8,7 +8,8 @@ computer. A FIDO2 sign-in key does not unlock BitLocker.
 ## Windows is accessible
 
 Use **Opzioni di accesso → Password** to sign in. Open **Gestione HID FIDO2 →
-Installazione → Rimuovi provider** to remove the project's registration.
+Impostazioni → Installazione → Rimuovi accesso con chiave…** (English:
+**Settings → Installation → Remove key sign-in…**) to remove the project's registration.
 This preserves vault data and other credential providers.
 
 The native update controller stages and checks the new package before

@@ -12,7 +12,8 @@ autenticazione Windows. Mantieni una password Windows funzionante per il recuper
 
 ## Funzionalità
 
-- Gestore Win32 nativo per registrazione, verifica, revoca e stato delle chiavi.
+- Gestore Win32 nativo con tre schede: Accesso, Chiavi e Impostazioni.
+- Configurazione illustrata con un'azione alla volta, menu delle chiavi e report locali.
 - Italiano e inglese, con scelta della lingua salvata e istruzioni in linguaggio semplice.
 - CTAP2 / USB HID con verifica del PIN FIDO2 e della presenza dell'utente.
 - Protezione `hmac-secret` separata per chiave e prove hardware memorizzate.
@@ -22,29 +23,35 @@ autenticazione Windows. Mantieni una password Windows funzionante per il recuper
 - Applicazione e installer senza PowerShell, .NET, browser, driver USB
   personalizzati o servizi di rete.
 
-Versione attuale: **0.7.0**. Scegli **Italiano** o **English** da
-**Lingua / Language** nella barra laterale. La pagina cambia subito e la
+Versione attuale: **0.9.0** ([novità e verifiche](docs/release-notes-0.9.md)).
+Il pacchetto di installazione è un'anteprima sperimentale non firmata.
+Scegli **Italiano** o **English** da
+**Impostazioni → Lingua / Language**. La pagina cambia subito e la
 scelta viene salvata per questo computer. I nuovi dialoghi delle chiavi e il
 componente di accesso al successivo caricamento usano la stessa lingua.
 I nomi delle chiavi già registrate restano invariati.
 
 ## Schermate di esempio
 
-Schermate del gestore nativo, acquisite dalla versione 0.7.0 in modalità
+Schermate del gestore nativo, acquisite dalla versione 0.9.0 in modalità
 `--demo`. Gli esempi usano dati fittizi e hanno le operazioni reali
 disabilitate: non mostrano credenziali o risultati di verifica hardware
 effettivi del computer.
 
-**Panoramica** — stato dell'accesso, chiavi registrate e istruzioni per lo sblocco Windows.
+**Accesso** — stato attuale, una sola azione successiva e istruzioni espandibili.
 
-![Panoramica del gestore HID FIDO2 con stato di esempio e istruzioni per sbloccare Windows](docs/images/manager-overview.png)
+![Scheda Accesso con una sola azione principale e istruzioni facoltative](docs/images/manager-overview.png)
 
 <details>
-<summary>Gestione chiavi, password e recupero, installazione</summary>
+<summary>Chiavi, impostazioni e configurazione illustrata</summary>
 
 **Chiavi** — elenco delle chiavi e stato separato delle prove di protezione hardware.
 
 ![Gestione delle chiavi con Principale e Riserva di esempio e stato della protezione hardware](docs/images/manager-keys.png)
+
+**Impostazioni** — recupero, installazione, assistenza e lingua.
+
+![Impostazioni con tre collegamenti alle funzioni e selezione della lingua](docs/images/manager-settings.png)
 
 **Password e recupero** — aggiornamento della copia cifrata e gestione delle copie protette dell'archivio.
 
@@ -53,6 +60,18 @@ effettivi del computer.
 **Installazione** — stato del provider, installazione, rimozione e guida di recupero.
 
 ![Pagina installazione con stato di esempio del provider e comandi di gestione nativi](docs/images/manager-installation.png)
+
+**Configurazione guidata** — recupero con password, due chiavi, controlli e prove in Windows.
+
+![Preparazione della configurazione con una sola conferma del recupero](docs/images/manager-setup.png)
+
+**Guida fisica** — istruzione breve e illustrazione dell'operazione in corso.
+
+![Passaggio del contatto con una sola istruzione e illustrazione della chiave](docs/images/wizard-touch.png)
+
+**Assistenza** — raccolta diagnostica avviata dall'utente e anteprima prima del salvataggio.
+
+![Pagina assistenza con raccolta limitata e creazione del report locale](docs/images/manager-support.png)
 
 </details>
 
@@ -73,8 +92,8 @@ La versione non è certificata o pronta per una distribuzione generale in produz
 
 ## Installazione da un pacchetto pronto
 
-Scarica lo [ZIP di installazione Windows x64](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/download/v0.7.0/HID-FIDO2-Windows-Logon-0.7.0-x64.zip)
-e il relativo checksum SHA-256 dalla [Release v0.7.0](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/tag/v0.7.0).
+Scarica lo [ZIP di installazione Windows x64](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/download/v0.9.0/HID-FIDO2-Windows-Logon-0.9.0-x64.zip)
+e il relativo checksum SHA-256 dalla [Release v0.9.0](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/tag/v0.9.0).
 La release è un'anteprima sperimentale non firmata.
 
 Estrai l'intero ZIP di distribuzione e apri
@@ -138,13 +157,13 @@ payload mancanti, alterati o inattesi vengono rifiutati.
    il consenso esplicito al prototipo.
 2. Registra una chiave principale e una di riserva nei dialoghi nativi.
    Inserisci password Windows e PIN della chiave soltanto in quelle finestre.
-3. Installa il provider da **Installazione**, dopo aver verificato che
+3. Installa il provider da **Impostazioni → Installazione**, dopo aver verificato che
    l'accesso di recupero con password Windows funzioni.
 4. Blocca Windows, scegli **Opzioni di accesso → HID FIDO2**, inserisci il PIN
    della chiavetta e toccala quando richiesto.
 
 Il gestore installato è **Gestione HID FIDO2** in Start e sul Desktop. Dopo
-aver cambiato la password Windows, scegli **Password e recupero → Aggiorna
+aver cambiato la password Windows, scegli **Impostazioni → Password e recupero → Aggiorna
 password salvata**. Consulta la [guida d'uso](docs/usage.md).
 
 ## Sicurezza e recupero

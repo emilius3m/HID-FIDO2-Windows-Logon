@@ -6,6 +6,7 @@
 #include "hidfido/hid_transport.hpp"
 #include "hidfido/machine_vault.hpp"
 #include "hidfido/secret_dialog.hpp"
+#include "hidfido/guided_ceremony.hpp"
 #include "hidfido/account.hpp"
 #include "hidfido/user_messages.hpp"
 #include "../ctap/hmac_diagnostic.hpp"
@@ -34,6 +35,7 @@ using password::SecureBytes;
 namespace diagnostic = vault::diagnostic;
 using Stage = diagnostic::Stage;
 diagnostic::Report* active_report{};
+ui::GuidedCeremony* active_ceremony{};
 
 diagnostic::Scope phase(Stage stage) { return {active_report, stage}; }
 
@@ -41,6 +43,17 @@ class Cancelled : public std::runtime_error {
 public:
     Cancelled() : std::runtime_error("Operation cancelled") {}
 };
+void check_cancelled() { if (active_ceremony && active_ceremony->cancelled()) throw Cancelled(); }
+void show_step(ui::GuideStep step, std::wstring_view label = {}) {
+    check_cancelled(); if (active_ceremony) active_ceremony->show(step, std::wstring(label));
+}
+ctap::ContinueCheck continue_ceremony() { return [] { return !active_ceremony || !active_ceremony->cancelled(); }; }
+void release_sensor() {
+    if (active_ceremony && !active_ceremony->acknowledge(ui::GuideStep::release)) throw Cancelled();
+}
+std::unique_ptr<ctap::HidTransport> open_ceremony_transport(const ctap::HidDeviceInfo& device, std::chrono::milliseconds timeout = std::chrono::seconds(90)) {
+    check_cancelled(); return ctap::open_hid_transport(device, timeout, 3, continue_ceremony());
+}
 // Failure already explained to the user in Italian.
 class UserError : public std::runtime_error {
 public:
@@ -205,15 +218,26 @@ SecureBytes request_password(const Account& account, const wchar_t* purpose) {
     const auto operation = phase(Stage::password_input);
     const auto instructions = std::wstring(purpose) + tr(L"\nAccount: ") + account.name +
         tr(L". La password viene verificata con Windows e salvata solo cifrata.");
-    auto typed = ui::prompt_secret(tr(L"HID FIDO2 - password Windows"), instructions.c_str(),
-                                   static_cast<unsigned>(vault::max_password_units));
+    auto typed = active_ceremony ? active_ceremony->secret(ui::GuideStep::password, account.name) :
+        ui::prompt_secret(tr(L"HID FIDO2 - password Windows"), instructions.c_str(), static_cast<unsigned>(vault::max_password_units));
     if (!typed) throw Cancelled();
+    if (active_ceremony) active_ceremony->show(ui::GuideStep::checking, {}, tr(L"Attendi la risposta di Windows."), tr(L"Verifica della password"));
     validate_windows_password(account, typed->bytes());
     return std::move(*typed);
 }
 
 SecureBytes request_pin(std::wstring_view key) {
     const auto operation = phase(Stage::pin_input);
+    if (active_ceremony) {
+        show_step(ui::GuideStep::connect, key);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
+        while (ctap::enumerate_fido_hid().size() != 1) {
+            check_cancelled(); if (std::chrono::steady_clock::now() >= deadline) throw UserError(tr(L"Tempo scaduto in attesa della chiave."));
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        auto pin = active_ceremony->secret(ui::GuideStep::pin, std::wstring(key));
+        if (!pin) throw Cancelled(); return std::move(*pin);
+    }
     const auto devices = ctap::enumerate_fido_hid();
     if (devices.empty()) throw UserError(tr(L"Nessuna chiave FIDO2 collegata: collegala prima di inserire il PIN."));
     if (devices.size() != 1) throw UserError(tr(L"Collega una sola chiave FIDO2 alla volta, prima di inserire il PIN."));
@@ -226,6 +250,7 @@ SecureBytes request_pin(std::wstring_view key) {
 
 void confirm(const std::wstring& text) {
     const auto operation = phase(Stage::confirmation);
+    if (active_ceremony) { if (!active_ceremony->acknowledge(ui::GuideStep::confirm, {}, text)) throw Cancelled(); return; }
     if (MessageBoxW(nullptr, text.c_str(), tr(L"HID FIDO2 - archivio macchina"),
                     MB_OKCANCEL | MB_ICONINFORMATION | MB_SETFOREGROUND) != IDOK) {
         throw Cancelled();
@@ -245,7 +270,7 @@ std::unique_ptr<ctap::HidTransport> open_single_key() {
     if (devices.empty()) throw UserError(tr(L"Nessuna chiave FIDO2 collegata."));
     if (devices.size() != 1) throw UserError(tr(L"Collega una sola chiave FIDO2 alla volta."));
     const auto opening = phase(Stage::hid_open);
-    return ctap::open_hid_transport(devices.front());
+    return open_ceremony_transport(devices.front());
 }
 
 void wait_for_key_count(std::size_t desired) {
@@ -253,6 +278,7 @@ void wait_for_key_count(std::size_t desired) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
     std::optional<std::chrono::steady_clock::time_point> stable_since;
     while (std::chrono::steady_clock::now() < deadline) {
+        check_cancelled();
         const auto now = std::chrono::steady_clock::now();
         if (ctap::enumerate_fido_hid().size() == desired) {
             if (!stable_since) stable_since = now;
@@ -294,6 +320,7 @@ void wait_for_original_key(const ctap::HidDeviceInfo& device) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
     std::optional<std::chrono::steady_clock::time_point> stable;
     while (std::chrono::steady_clock::now() < deadline) {
+        check_cancelled();
         const auto devices = ctap::enumerate_fido_hid();
         const auto now = std::chrono::steady_clock::now();
         if (devices.size() == 1 && devices.front().path == device.path) {
@@ -316,13 +343,16 @@ bool equal_secret(std::span<const std::uint8_t> left, std::span<const std::uint8
 // collected and no existing wrapper is changed until both probes conclude.
 void verify_protection_after_reconnect(NewKey& key, const ctap::HidDeviceInfo& original,
                                       std::span<const std::uint8_t> pin) {
-    confirm(tr(L"Verifica obbligatoria di questa chiave prima di registrarla.\nPremi OK, poi scollega la chiave. Quando la console lo indica, reinseriscila nella STESSA porta USB.\nVerrà provato l'accesso al segreto senza PIN; nessuna password Windows viene richiesta ora."));
+    if (!active_ceremony) confirm(tr(L"Verifica obbligatoria di questa chiave prima di registrarla.\nPremi OK, poi scollega la chiave. Quando la console lo indica, reinseriscila nella STESSA porta USB.\nVerrà provato l'accesso al segreto senza PIN; nessuna password Windows viene richiesta ora."));
+    show_step(ui::GuideStep::remove);
     std::wcout << tr(L"Scollega ora la chiave.\n") << std::flush;
     wait_for_key_count(0);
+    show_step(ui::GuideStep::reconnect);
     std::wcout << tr(L"Rimozione rilevata. Reinserisci la stessa chiave nella stessa porta USB.\n") << std::flush;
     wait_for_original_key(original);
     // The Crescendo key may not answer this request; 30 s bounds the wait.
-    auto transport = [&] { const auto opening = phase(Stage::hid_open); return ctap::open_hid_transport(original, std::chrono::seconds(30)); }();
+    auto transport = [&] { const auto opening = phase(Stage::hid_open); return open_ceremony_transport(original, std::chrono::seconds(30)); }();
+    show_step(ui::GuideStep::touch);
     std::wcout << tr(L"Verifica separata senza PIN: tocca la chiave quando lampeggia (il tocco serve anche senza PIN).\n") << std::flush;
     std::optional<ctap::diagnostic::ProbeResult> probe;
     try {
@@ -336,7 +366,8 @@ void verify_protection_after_reconnect(NewKey& key, const ctap::HidDeviceInfo& o
     if (!probe) throw UserError(tr(L"Verifica senza PIN inconcludente: protezione non dimostrata. Nessuna modifica all'archivio. Scollega e ricollega la chiave prima di una nuova prova esplicita."));
     ObservedTransport observed(*transport);
     ctap::HmacClient client(observed);
-    confirm(tr(L"Stacca il dito, premi OK e tocca di nuovo brevemente quando lampeggia per l'ultima verifica con PIN."));
+    if (active_ceremony) release_sensor(); else confirm(tr(L"Stacca il dito, premi OK e tocca di nuovo brevemente quando lampeggia per l'ultima verifica con PIN."));
+    show_step(ui::GuideStep::touch);
     std::wcout << tr(L"Verifica finale con PIN: tocca la chiave ora, quando lampeggia.\n") << std::flush;
     auto after = client.get_secret(pin, key.credential, key.salt);
     if (!equal_secret(after.bytes(), key.secret.bytes())) {
@@ -357,14 +388,16 @@ NewKey enroll_key(const Account& account, std::wstring_view label, std::span<con
     NewKey key;
     key.salt = random_hash();
     {
-        auto transport = [&] { const auto opening = phase(Stage::hid_open); return ctap::open_hid_transport(original); }();
+        auto transport = [&] { const auto opening = phase(Stage::hid_open); return open_ceremony_transport(original); }();
         ObservedTransport observed(*transport);
         ctap::HmacClient client(observed);
         std::wcout << tr(L"Registrazione della chiave ") << label << tr(L": tocca la chiave quando lampeggia.\n") << std::flush;
+        show_step(ui::GuideStep::touch, label);
         key.credential = client.make_credential(pin, random_hash(), utf8_prefix(account.name_utf8, 64),
             "Accesso Windows " + utf8_prefix(account.name_utf8, 40), exclude_ids);
         for (unsigned attempt = 1;; ++attempt) {
-            confirm(tr(L"Credenziale creata sulla chiave ") + std::wstring(label) + tr(L".\nStacca il dito, premi OK e tocca di nuovo brevemente quando lampeggia."));
+            if (active_ceremony) release_sensor(); else confirm(tr(L"Credenziale creata sulla chiave ") + std::wstring(label) + tr(L".\nStacca il dito, premi OK e tocca di nuovo brevemente quando lampeggia."));
+            show_step(ui::GuideStep::touch, label);
             try { key.secret = client.get_secret(pin, key.credential, key.salt); break; }
             catch (const ctap::StatusError& error) {
                 report_error(error);
@@ -386,6 +419,7 @@ vault::Unlocked unlock_existing(vault::AccountRecord& record, std::span<const st
     auto transport = open_single_key();
     ObservedTransport observed(*transport);
     ctap::HmacClient client(observed);
+    show_step(ui::GuideStep::touch, expected_label);
     std::wcout << tr(L"Tocca la chiave ora, quando lampeggia.\n") << std::flush;
     auto unlocked = vault::unlock_data_key(record, [&](vault::KeyWrapper& wrapper) {
         if (!expected_label.empty() && wrapper.label != expected_label) throw vault::CredentialNotOnKey();
@@ -421,6 +455,7 @@ template<class Change> void commit_key_use(const Account& account, const vault::
                                           const vault::AccountRecord& verified, std::size_t index,
                                           Change&& change) {
     const auto operation = phase(Stage::vault_commit);
+    check_cancelled();
     vault::Lock lock(vault_path());
     auto current = vault::load(vault_path());
     auto* record = current.find(account.sid);
@@ -436,7 +471,7 @@ void verify_protection(const Account& account, const std::wstring& label) {
     const auto found = std::find_if(before.wrappers.begin(), before.wrappers.end(), [&](const auto& value) { return value.label == label; });
     if (found == before.wrappers.end()) throw UserError(tr(L"Nessuna chiave con questa etichetta."));
     const auto index = static_cast<std::size_t>(found - before.wrappers.begin());
-    confirm(tr(L"Collega soltanto la chiave ") + label + tr(L".\nLa prova verifica questa credenziale dopo reinserimento, senza PIN e poi con PIN. Password Windows e dati cifrati restano invariati."));
+    if (!active_ceremony) confirm(tr(L"Collega soltanto la chiave ") + label + tr(L".\nLa prova verifica questa credenziale dopo reinserimento, senza PIN e poi con PIN. Password Windows e dati cifrati restano invariati."));
     auto pin = request_pin(label);
     const auto devices = ctap::enumerate_fido_hid();
     if (devices.size() != 1) throw UserError(tr(L"Collega una sola chiave FIDO2."));
@@ -445,10 +480,11 @@ void verify_protection(const Account& account, const std::wstring& label) {
     key.credential = found->credential;
     key.salt = found->salt;
     {
-        auto transport = [&] { const auto opening = phase(Stage::hid_open); return ctap::open_hid_transport(devices.front()); }();
+        auto transport = [&] { const auto opening = phase(Stage::hid_open); return open_ceremony_transport(devices.front()); }();
         ObservedTransport observed(*transport);
         ctap::HmacClient client(observed);
         std::wcout << tr(L"Tocca la chiave quando lampeggia.\n") << std::flush;
+        show_step(ui::GuideStep::touch, label);
         key.secret = client.get_secret(pin.bytes(), key.credential, key.salt);
         // Confirm this UV secret is precisely the one protecting this wrapper.
         auto opened = vault::unwrap_data_key(before, *found, key.secret.bytes());
@@ -464,7 +500,7 @@ void verify_protection(const Account& account, const std::wstring& label) {
         }
         throw vault::ConcurrencyConflict();
     });
-    MessageBoxW(nullptr, tr(L"Protezione hardware verificata per questa chiave. Password cifrata e altre chiavi restano invariate."),
+    if (!active_ceremony) MessageBoxW(nullptr, tr(L"Protezione hardware verificata per questa chiave. Password cifrata e altre chiavi restano invariate."),
         tr(L"HID FIDO2 - verifica completata"), MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
 }
 
@@ -488,7 +524,8 @@ void restore_backup(const Account& account, const std::wstring& id) {
     if (before.stale) throw UserError(tr(L"Password memorizzata sospesa: accedi con la password Windows corrente e aggiornala prima di un ripristino."));
     const auto backup = vault::load_backup(vault_path(), utf8(id), account.sid);
     vault::validate_backup_restore(before, backup);
-    confirm(tr(L"Ripristinare la password cifrata da questa copia compatibile?\nServono una chiave attualmente autorizzata e un contatto. Windows verificherà la password UNA volta.\nLe chiavi revocate non vengono aggiunte e i contatori non vengono ridotti."));
+    if (active_ceremony) confirm(tr(L"Ripristinare la copia selezionata? La password sarà verificata una volta con Windows."));
+    else confirm(tr(L"Ripristinare la password cifrata da questa copia compatibile?\nServono una chiave attualmente autorizzata e un contatto. Windows verificherà la password UNA volta.\nLe chiavi revocate non vengono aggiunte e i contatori non vengono ridotti."));
     auto pin = request_pin(tr(L"attualmente registrata"));
     auto verified = before;
     auto unlocked = unlock_existing(verified, pin.bytes());
@@ -511,7 +548,7 @@ void restore_backup(const Account& account, const std::wstring& id) {
         vault::restore_password_payload(current, backup, unlocked.data_key.bytes(), password.bytes());
     });
     password.clear();
-    MessageBoxW(nullptr, tr(L"Password cifrata ripristinata e verificata. Generazione incrementata, chiavi e contatori correnti preservati."),
+    if (!active_ceremony) MessageBoxW(nullptr, tr(L"Password cifrata ripristinata e verificata. Generazione incrementata, chiavi e contatori correnti preservati."),
         tr(L"HID FIDO2 - ripristino completato"), MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
 }
 
@@ -536,6 +573,7 @@ void enroll(const Account& account, const std::wstring& label) {
     vault::Lock lock(vault_path());
     auto current = vault::load(vault_path());
     if (current.find(account.sid)) throw UserError(tr(L"L'account è stato registrato da un'altra operazione."));
+    check_cancelled();
     current.accounts.push_back(std::move(record));
     vault::save(vault_path(), current);
     std::wcout << tr(L"Account registrato con la chiave ") << label << L".\n"
@@ -549,13 +587,14 @@ void add_key(const Account& account, const std::wstring& label) {
     for (const auto& wrapper : before.wrappers) {
         if (wrapper.label == label) throw UserError(tr(L"Esiste già una chiave con questa etichetta."));
     }
-    confirm(tr(L"Collega una chiave GIÀ registrata per l'account (per esempio Principale).\nServirà il suo PIN e un tocco per sbloccare l'archivio."));
+    if (!active_ceremony) confirm(tr(L"Collega una chiave GIÀ registrata per l'account (per esempio Principale).\nServirà il suo PIN e un tocco per sbloccare l'archivio."));
     auto pin = request_pin(tr(L"già registrata"));
     auto unlocked = unlock_existing(verified, pin.bytes());
     pin.clear();
-    confirm(tr(L"Ora scollega la chiave usata e premi OK."));
+    if (active_ceremony) show_step(ui::GuideStep::remove); else confirm(tr(L"Ora scollega la chiave usata e premi OK."));
     wait_for_key_count(0);
     std::wcout << tr(L"Collega la nuova chiave ") << label << L".\n" << std::flush;
+    show_step(ui::GuideStep::connect, label);
     wait_for_key_count(1);
     auto new_pin = request_pin(label);
     std::vector<Bytes> enrolled;
@@ -573,7 +612,7 @@ void update_password(const Account& account) {
     const auto operation = phase(Stage::update_password);
     const auto before = snapshot(account);
     auto verified = before;
-    confirm(tr(L"Collega una chiave registrata per l'account (Principale o Riserva)."));
+    if (!active_ceremony) confirm(tr(L"Collega una chiave registrata per l'account (Principale o Riserva)."));
     auto pin = request_pin(tr(L"registrata"));
     auto unlocked = unlock_existing(verified, pin.bytes());
     pin.clear();
@@ -599,7 +638,8 @@ void verify_key(const Account& account, const std::wstring& label) {
     if (std::ranges::none_of(before.wrappers, [&](const auto& wrapper) { return wrapper.label == label; })) {
         throw UserError(tr(L"Nessuna chiave registrata con questa etichetta."));
     }
-    confirm(tr(L"Collega soltanto la chiave ") + label + tr(L".\nIl PIN e un contatto apriranno l'archivio. La password cifrata sarà verificata UNA volta con Windows.\nNessuna sessione Windows viene aperta o sbloccata. Un rifiuto della password sospende il record."));
+    if (active_ceremony) confirm(tr(L"La password salvata verrà verificata una volta con Windows. Questa prova non sblocca il PC."));
+    else confirm(tr(L"Collega soltanto la chiave ") + label + tr(L".\nIl PIN e un contatto apriranno l'archivio. La password cifrata sarà verificata UNA volta con Windows.\nNessuna sessione Windows viene aperta o sbloccata. Un rifiuto della password sospende il record."));
     auto pin = request_pin(label);
     auto verified = before;
     auto unlocked = unlock_existing(verified, pin.bytes(), label);
@@ -637,7 +677,7 @@ void verify_key(const Account& account, const std::wstring& label) {
     }
     const auto message = tr(L"Chiave ") + label + tr(L" verificata: archivio decifrato e password confermata da Windows per questo account.\nIl token di verifica è stato chiuso. Questa prova non accede e non sblocca Windows.");
     std::wcout << message << L"\n";
-    MessageBoxW(nullptr, message.c_str(), tr(L"HID FIDO2 - verifica completata"), MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+    if (!active_ceremony) MessageBoxW(nullptr, message.c_str(), tr(L"HID FIDO2 - verifica completata"), MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
 }
 
 void remove_key(const Account& account, const std::wstring& label) {
@@ -654,6 +694,26 @@ void remove_key(const Account& account, const std::wstring& label) {
     vault::remove_wrapper(*record, label);
     vault::save(vault_path(), current);
     std::wcout << tr(L"Chiave ") << label << tr(L" rimossa.\n");
+}
+
+void rename_key(const Account& account, const std::wstring& label, const std::wstring& replacement) {
+    const auto operation = phase(Stage::rename_key);
+    const auto before = snapshot(account);
+    const auto found = std::find_if(before.wrappers.begin(), before.wrappers.end(), [&](const auto& key) { return key.label == label; });
+    if (found == before.wrappers.end()) throw UserError(tr(L"Nessuna chiave con questa etichetta."));
+    for (const auto& key : before.wrappers) {
+        if (key.label == replacement && key.credential.id != found->credential.id) throw UserError(tr(L"Esiste già una chiave con questa etichetta."));
+    }
+    vault::Lock lock(vault_path());
+    auto current = vault::load(vault_path());
+    auto* record = current.find(account.sid);
+    if (!record) throw vault::ConcurrencyConflict();
+    vault::validate_key_authority(*record, before, found->credential.id);
+    const auto selected = std::find_if(record->wrappers.begin(), record->wrappers.end(), [&](const auto& key) { return key.credential.id == found->credential.id; });
+    if (selected == record->wrappers.end() || selected->label != label) throw vault::ConcurrencyConflict();
+    vault::rename_wrapper(*record, label, replacement);
+    vault::save(vault_path(), current);
+    MessageBoxW(nullptr, tr(L"Nome della chiave aggiornato. Non occorre registrarla di nuovo."), tr(L"Gestione HID FIDO2"), MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
 }
 
 void remove_account(const Account& account) {
@@ -741,6 +801,7 @@ void status_json(const Account& account) {
 }
 
 void usage() {
+    std::wcout << tr(L"Rinomina: hid-fido2-vault --rename-key \"Nome attuale\" --new-label \"Nome nuovo\"\n");
     std::wcout <<
         tr(L"hid-fido2-vault: archivio macchina per l'accesso Windows con chiave FIDO2 (richiede amministratore).\n  hid-fido2-vault --status\n  hid-fido2-vault --status-json [--expected-sid SID]\n  hid-fido2-vault --enroll Principale\n  hid-fido2-vault --add-key Riserva\n  hid-fido2-vault --verify Principale (o Riserva; non apre una sessione Windows)\n  hid-fido2-vault --verify-protection Principale (o Riserva; prova hardware rigorosa)\n  hid-fido2-vault --update-password\n  hid-fido2-vault --backup\n  hid-fido2-vault --restore-backup ID (solo copia compatibile, senza ripristinare chiavi revocate)\n  hid-fido2-vault --remove-key Riserva\n  hid-fido2-vault --remove-account\nOgni comando accetta --expected-sid SID per verificare l'account dopo UAC.\nDiagnostica pubblica: --report <file-nuovo.jsonl> (solo fasi e codici numerici, senza segreti o identificatori).\nPassword e PIN solo nelle finestre locali del programma, mai sulla riga di comando.\n");
 }
@@ -752,12 +813,19 @@ int wmain(int argc, wchar_t** argv) {
     _setmode(_fileno(stdout), json ? _O_TEXT : _O_U16TEXT);
     _setmode(_fileno(stderr), _O_U16TEXT);
     ui::disable_console_selection();
-    if (argc < 2 || argc > 9) { if (!json) usage(); return 1; }
+    if (argc < 2 || argc > 13) { if (!json) usage(); return 1; }
     const std::wstring command = argv[1];
-    std::wstring argument, expected_sid, report_path;
-    bool language_set{};
+    const bool needs_label = command == L"--enroll" || command == L"--add-key" || command == L"--remove-key" ||
+        command == L"--verify" || command == L"--verify-protection" || command == L"--restore-backup" || command == L"--rename-key";
+    std::wstring argument, expected_sid, report_path, new_label;
+    bool language_set{}, guided{};
     for (int index = 2; index < argc; ++index) {
-        if (std::wstring_view(argv[index]) == L"--expected-sid") {
+        // A label is always the first argument, even if its literal text is
+        // identical to an option. Manager arguments are quoted, never commands.
+        if (index == 2 && needs_label) { argument = argv[index]; }
+        else if (std::wstring_view(argv[index]) == L"--guided") {
+            if (guided) { if (!json) usage(); return 1; } guided = true;
+        } else if (std::wstring_view(argv[index]) == L"--expected-sid") {
             if (!expected_sid.empty() || ++index == argc) { if (!json) usage(); return 1; }
             expected_sid = argv[index];
             if (expected_sid.empty()) { if (!json) usage(); return 1; }
@@ -766,23 +834,32 @@ int wmain(int argc, wchar_t** argv) {
             const auto selected = ui::parse_language(argv[index]);
             if (!selected) { if (!json) usage(); return 1; }
             ui::set_language(*selected); language_set = true;
+        } else if (std::wstring_view(argv[index]) == L"--new-label") {
+            if (!new_label.empty() || ++index == argc || !*argv[index]) { if (!json) usage(); return 1; }
+            new_label = argv[index];
         } else if (std::wstring_view(argv[index]) == L"--report") {
             if (!report_path.empty() || ++index == argc) { if (!json) usage(); return 1; }
             report_path = argv[index];
             if (report_path.empty()) { if (!json) usage(); return 1; }
-        } else if (argument.empty()) argument = argv[index];
-        else { if (!json) usage(); return 1; }
+        } else { if (!json) usage(); return 1; }
     }
-    const bool needs_label = command == L"--enroll" || command == L"--add-key" || command == L"--remove-key" ||
-        command == L"--verify" || command == L"--verify-protection" || command == L"--restore-backup";
     if (needs_label != !argument.empty()) { if (!json) usage(); return 1; }
+    if ((command == L"--rename-key") != !new_label.empty()) { if (!json) usage(); return 1; }
+    const bool interactive = command == L"--enroll" || command == L"--add-key" || command == L"--verify" || command == L"--verify-protection" || command == L"--update-password" || command == L"--restore-backup";
+    if (guided && !interactive) { if (!json) usage(); return 1; }
     std::unique_ptr<diagnostic::Report> report;
+    std::unique_ptr<ui::GuidedCeremony> ceremony;
     const auto finish = [&](int code) {
         if (report) {
             report->finished(code);
             std::wcerr << tr(L"Report diagnostico pubblico: ") << report_path << L"\n";
         }
-        active_report = nullptr;
+        if (ceremony && code == 0 && !ceremony->cancelled()) {
+            const auto heading = command == L"--enroll" || command == L"--add-key" ? tr(L"Chiave registrata") : command == L"--verify-protection" ? tr(L"Controllo di sicurezza superato") : command == L"--update-password" ? tr(L"Password aggiornata") : tr(L"Operazione completata");
+            const auto detail = command == L"--verify" ? tr(L"La prova locale è riuscita. Prova lo sblocco separatamente in Windows.") : tr(L"Puoi tornare al gestore.");
+            (void)ceremony->acknowledge(ui::GuideStep::success, argument, detail, heading);
+        }
+        active_report = nullptr; active_ceremony = nullptr;
         return code;
     };
     try {
@@ -802,6 +879,7 @@ int wmain(int argc, wchar_t** argv) {
         if (!vault::installed_provider_supports_schema2()) {
             throw UserError(tr(L"Aggiorna prima il Credential Provider a una versione compatibile con l archivio. Nessuna modifica all'archivio e nessun PIN acquisito."));
         }
+        if (guided) { ceremony = std::make_unique<ui::GuidedCeremony>(command == L"--add-key" ? 2 : 1, command == L"--enroll" || command == L"--add-key"); active_ceremony = ceremony.get(); }
         if (command == L"--enroll") enroll(account, argument);
         else if (command == L"--add-key") add_key(account, argument);
         else if (command == L"--verify") verify_key(account, argument);
@@ -809,6 +887,7 @@ int wmain(int argc, wchar_t** argv) {
         else if (command == L"--update-password") update_password(account);
         else if (command == L"--restore-backup") restore_backup(account, argument);
         else if (command == L"--remove-key") remove_key(account, argument);
+        else if (command == L"--rename-key") rename_key(account, argument, new_label);
         else if (command == L"--remove-account") remove_account(account);
         else { usage(); return finish(1); }
         return finish(0);
@@ -818,13 +897,16 @@ int wmain(int argc, wchar_t** argv) {
         return finish(2);
     } catch (const UserError& error) {
         report_error(error);
+        if (ceremony) { if (ceremony->cancelled()) return finish(2); (void)ceremony->acknowledge(ui::GuideStep::error, {}, error.message()); return finish(1); }
         std::wcerr << tr(L"Errore: ") << error.message() << L"\n";
         if (!json) MessageBoxW(nullptr, error.message().c_str(), tr(L"HID FIDO2 - operazione interrotta"),
                               MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return finish(1);
     } catch (const std::exception& error) {
         report_error(error);
+        if (ceremony && ceremony->cancelled()) return finish(2);
         const auto message = ui::describe_failure(error);
+        if (ceremony) { (void)ceremony->acknowledge(ui::GuideStep::error, {}, message); return finish(1); }
         std::wcerr << tr(L"Errore: ") << message << L"\n";
         if (!json) MessageBoxW(nullptr, message.c_str(), tr(L"HID FIDO2 - operazione interrotta"),
                               MB_OK | MB_ICONERROR | MB_SETFOREGROUND);

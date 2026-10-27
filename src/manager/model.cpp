@@ -54,11 +54,30 @@ bool can_run(const Status& s, VaultAction action, bool busy, bool demo) noexcept
     case VaultAction::verify: case VaultAction::verify_protection: return s.enrolled && s.active && !s.keys.empty();
     case VaultAction::add_key: return s.enrolled && s.active && s.keys.size() < 8;
     case VaultAction::remove_key: return s.enrolled && s.keys.size() > 1;
+    case VaultAction::rename_key: return s.enrolled && !s.keys.empty();
     case VaultAction::update_password: case VaultAction::backup: return s.enrolled;
     case VaultAction::restore: return s.enrolled && !s.backups.empty();
     } return false;
 }
-std::vector<std::wstring> vault_arguments(VaultAction action, std::wstring_view selection, std::wstring_view sid) {
+bool valid_key_label(std::wstring_view label) noexcept {
+    return !label.empty() && label.size() <= 64 && std::all_of(label.begin(), label.end(), [](wchar_t c) {
+        return c >= 0x20 && c != 0x7f && !(c >= 0xd800 && c <= 0xdfff);
+    });
+}
+SetupStep setup_step(const Status& s, const SetupChecks& checks) noexcept {
+    if (!s.observed || !s.compatible) return SetupStep::unavailable;
+    if (!checks.recovery) return SetupStep::recovery;
+    if (!s.enrolled) return SetupStep::primary;
+    if (!s.active) return SetupStep::password;
+    if (s.keys.size() < 2) return SetupStep::spare;
+    if (std::count_if(s.keys.begin(), s.keys.end(), [](const auto& key) {
+        return key.proof == "verified_denied" || key.proof == "verified_distinct";
+    }) < 2) return SetupStep::protection;
+    if (!s.registered) return SetupStep::activation;
+    if (!checks.primary_unlock || !checks.spare_unlock || !checks.restart) return SetupStep::trial;
+    return SetupStep::complete;
+}
+std::vector<std::wstring> vault_arguments(VaultAction action, std::wstring_view selection, std::wstring_view sid, std::wstring_view new_label) {
     // Fixed command vocabulary; no executable/script/command text from UI.
     const wchar_t* command{}; bool argument{};
     switch (action) {
@@ -67,17 +86,21 @@ std::vector<std::wstring> vault_arguments(VaultAction action, std::wstring_view 
     case VaultAction::verify_protection: command = L"--verify-protection"; argument = true; break;
     case VaultAction::add_key: command = L"--add-key"; argument = true; break;
     case VaultAction::remove_key: command = L"--remove-key"; argument = true; break;
+    case VaultAction::rename_key: command = L"--rename-key"; argument = true; break;
     case VaultAction::restore: command = L"--restore-backup"; argument = true; break;
     case VaultAction::update_password: command = L"--update-password"; break;
     case VaultAction::backup: command = L"--backup"; break;
     }
     if (!command || sid.empty() || sid.find(L'\0') != sid.npos) throw std::runtime_error("Invalid action");
+    if ((action == VaultAction::rename_key && !valid_key_label(new_label)) || (action != VaultAction::rename_key && !new_label.empty())) throw std::runtime_error("Invalid replacement label");
     std::vector<std::wstring> result{command};
     if (argument) {
         if (selection.empty() || selection.size() > 64 || selection.find(L'\0') != selection.npos) throw std::runtime_error("Invalid selection");
         if (action == VaultAction::restore && !valid_id(narrow(selection), 32)) throw std::runtime_error("Invalid backup selection");
         result.emplace_back(selection);
     }
+    if (action == VaultAction::rename_key) { result.emplace_back(L"--new-label"); result.emplace_back(new_label); }
+    if (action == VaultAction::enroll || action == VaultAction::add_key || action == VaultAction::verify || action == VaultAction::verify_protection || action == VaultAction::update_password || action == VaultAction::restore) result.emplace_back(L"--guided");
     result.emplace_back(L"--language"); result.emplace_back(ui::language_code(ui::language()));
     result.emplace_back(L"--expected-sid"); result.emplace_back(sid); return result;
 }

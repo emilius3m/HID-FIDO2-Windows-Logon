@@ -8,7 +8,8 @@ Native C++ Windows application and Credential Provider for signing in to and unl
 
 ## Features
 
-- Native Win32 manager for enrollment, key verification, revocation and status.
+- Native Win32 manager with three tabs: Sign-in, Security keys and Settings.
+- Illustrated setup with one action at a time, contextual key menus and local support reports.
 - Italian and English, with a saved language choice and plain-language instructions.
 - CTAP2 / USB HID with FIDO2 PIN and user-presence verification.
 - Per-key `hmac-secret` protection and recorded hardware protection checks.
@@ -17,27 +18,33 @@ Native C++ Windows application and Credential Provider for signing in to and unl
 - Package hashes, publisher pinning, Authenticode and detached manifest signing.
 - Application and installer require no PowerShell, .NET, browser, custom USB driver or network service.
 
-Current version: **0.7.0**. Choose **Italiano** or **English** from
-**Lingua / Language** in the sidebar. The page updates immediately, and the
+Current preview: **0.9.0** ([changes and validation](docs/release-notes-0.9.md)).
+The installation package is an unsigned experimental preview.
+Choose **Italiano** or **English** from
+**Settings → Lingua / Language**. The page updates immediately, and the
 choice is saved for this computer. New key dialogs and the next loaded
 sign-in component use the same language. Existing key names stay unchanged.
 
 ## Screenshots
 
-The native manager, captured in English from version 0.7.0 in `--demo` mode. These
+The native manager, captured in English from version 0.9.0 in `--demo` mode. These
 examples use synthetic data and have real operations disabled; they do not
 show a machine's actual credentials or hardware verification results.
 
-**Overview** — sign-in status, enrolled keys and instructions for Windows unlock.
+**Sign-in** — current status, one next action and expandable Windows instructions.
 
-![Native HID FIDO2 manager overview in English, showing example sign-in status, language choice and unlock instructions](docs/images/en/manager-overview.png)
+![Native manager Sign-in tab with one primary action and optional instructions](docs/images/en/manager-overview.png)
 
 <details>
-<summary>Key management, password recovery and installation</summary>
+<summary>Keys, settings and illustrated setup</summary>
 
 **Security keys** — enrolled keys and their separate hardware protection checks.
 
 ![Security key management with example primary and backup keys and security check states](docs/images/en/manager-keys.png)
+
+**Settings** — password recovery, installation, support and language.
+
+![Settings with three task links and the language selector](docs/images/en/manager-settings.png)
 
 **Password and recovery** — update the encrypted password copy and manage protected vault backups.
 
@@ -46,6 +53,18 @@ show a machine's actual credentials or hardware verification results.
 **Installation** — provider status, installation, removal and recovery guidance.
 
 ![Installation page with example sign-in status, installation and recovery controls](docs/images/en/manager-installation.png)
+
+**Guided setup** — password recovery, primary/spare keys, security checks and Windows trials.
+
+![Guided setup preparation with one recovery confirmation](docs/images/en/manager-setup.png)
+
+**Physical guidance** — a short instruction and illustration for the current key operation.
+
+![Guided touch step with one instruction and an illustration](docs/images/en/wizard-touch.png)
+
+**Support** — explicit diagnostic collection and a report preview before saving.
+
+![Support page with bounded collection controls and a local report action](docs/images/en/manager-support.png)
 
 </details>
 
@@ -63,8 +82,8 @@ HID Crescendo has been used during development. Other authenticators, Windows bu
 
 ## Install from a prepared package
 
-Download the [Windows x64 installation ZIP](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/download/v0.7.0/HID-FIDO2-Windows-Logon-0.7.0-x64.zip)
-and its SHA-256 checksum from [Release v0.7.0](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/tag/v0.7.0).
+Download the [Windows x64 installation ZIP](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/download/v0.9.0/HID-FIDO2-Windows-Logon-0.9.0-x64.zip)
+and its SHA-256 checksum from [Release v0.9.0](https://github.com/emilius3m/HID-FIDO2-Windows-Logon/releases/tag/v0.9.0).
 This release is an experimental unsigned preview.
 
 Extract the complete distribution ZIP, then open
@@ -117,12 +136,12 @@ Signed releases also contain `release.p7s`. Keep the complete directory together
 
 1. Open `Gestione-HID-FIDO2.exe` from a trusted complete package. Approve UAC as the same Windows account; unsigned local builds require explicit prototype consent.
 2. Enroll a primary key and a backup key using the native dialogs. Enter Windows passwords and key PINs only in those dialogs.
-3. Install the provider from **Installazione**, after checking Windows password recovery works.
+3. Install the provider from **Settings → Installation**, after checking Windows password recovery works.
 4. Lock Windows, select **Opzioni di accesso → HID FIDO2**, enter the key PIN and touch the key when requested.
 
 The installed manager is **Gestione HID FIDO2** in Start and on the Desktop
-(window title **HID FIDO2 Manager** in English). After changing the Windows
-password, choose **Password and recovery → Update saved password**. See the [user guide](docs/usage.md).
+(window title **HID FIDO2**). After changing the Windows
+password, choose **Settings → Password and recovery → Update saved password**. See the [user guide](docs/usage.md).
 
 ## Security and recovery
 
