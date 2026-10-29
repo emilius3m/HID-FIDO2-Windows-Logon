@@ -27,15 +27,19 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-This compiles the four product binaries, the separate `hid-fido2-age.exe`
-file-encryption tool and the isolated tests in `build\Release`. Compilation and tests do not install or register a provider.
+This compiles the five product binaries, the optional `hid-fido2-age.exe`
+command line and the isolated tests in `build\Release`. Compilation and tests do not install or register a provider.
 The product uses Windows APIs; provider/helpers use the MSVC x64 runtime,
 while the manager bootstrap links its CRT statically.
 
-`hid-fido2-age.exe` is not part of the sign-in package below. Its
-`AgeFileEncryption` test also reads the C2SP vectors in `tests/age-testkit`;
-the portable age core (`src/age/crypto.cpp`, `age.cpp`, `tar.cpp`) and
-`tests/age_tests.cpp` build with any C++20 compiler, without Windows.
+The package includes the file-encryption helper `hid-fido2-files.exe`;
+`hid-fido2-age.exe` is not packaged. The `AgeFileEncryption` test also reads the
+C2SP vectors in `tests/age-testkit`; the portable age core (`src/age/crypto.cpp`,
+`age.cpp`, `tar.cpp`, `files.cpp`) and `tests/age_tests.cpp` build with any C++20
+compiler, without Windows. `FilesPageIsolation` checks the Files page's Explorer
+registration in a private HKCU tree. `hid-fido2-files.exe --preview <state>`
+(`touch`, `choose`, `recovery`, `show`, `success`, `failure`; add
+`--snapshot <folder>` for PNG files) shows the helper with synthetic data.
 
 ## Optional hardware diagnostics
 
@@ -47,7 +51,7 @@ cmake --build --preset release
 This additionally builds `ctap-probe.exe` and `ctap-transport-check.exe`.
 These inspect capabilities/transport without enrollment or PIN attempts.
 Raw HID access may require elevation. They are developer diagnostics and are
-not included in the four-binary product package.
+not included in the five-binary product package.
 
 ## Package creation
 

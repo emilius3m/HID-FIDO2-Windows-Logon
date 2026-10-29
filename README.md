@@ -17,7 +17,7 @@ Native C++ Windows application and Credential Provider for signing in to and unl
 - Native installation, update, rollback and provider removal.
 - Package hashes, publisher pinning, Authenticode and detached manifest signing.
 - Application and installer require no PowerShell, .NET, browser, custom USB driver or network service.
-- Separate `hid-fido2-age` tool: encrypts files and folders in the standard age format for the primary key, the backup key and a paper recovery key.
+- **File** tab and File Explorer menu: encrypt files and folders in the standard age format so that the primary key, the backup key or a paper recovery key can open them.
 
 Current preview: **0.9.0** ([changes and validation](docs/release-notes-0.9.md)).
 The installation package is an unsigned experimental preview.
@@ -126,6 +126,7 @@ Use a new result filename each time. Packaging does not install or register anyt
 ```text
 Gestione-HID-FIDO2.exe
 bin/HidFido2CredentialProvider.dll
+bin/hid-fido2-files.exe
 bin/hid-fido2-vault.exe
 bin/provider-smoke.exe
 release.json
@@ -146,21 +147,17 @@ password, choose **Settings → Password and recovery → Update saved password*
 
 ## Encrypt files and folders
 
-`hid-fido2-age.exe` encrypts files and folders so that either security key, or a
-paper recovery key, can open them. It uses the standard
-[age](https://age-encryption.org/v1) format (FIDO2 PRF / `hmac-secret` through
-Windows WebAuthn, no administrator rights) and is independent of Windows sign-in.
+In the manager's **File** tab, add the primary and backup keys and create a
+paper recovery key once. Then use **Encrypt file…**, **Encrypt folder…** and
+**Decrypt…**, or right-click in File Explorer after enabling its menu. Any one
+key, or the paper key, opens a file; a folder becomes one `NAME.tar.age` file.
+Windows asks for the key's PIN and touch; the operations run with your normal
+rights, without UAC.
 
-```cmd
-hid-fido2-age --new-key Principale --profile destinatari.txt
-hid-fido2-age --new-key Riserva --profile destinatari.txt
-hid-fido2-age --new-recovery --profile destinatari.txt
-hid-fido2-age --encrypt Documenti --profile destinatari.txt
-hid-fido2-age --decrypt Documenti.tar.age --profile destinatari.txt
-```
-
-Security keys require Windows 11 22H2 or later. Files open with the official
-`age` tool and the recovery key on any system. See
+Files use the standard [age](https://age-encryption.org/v1) format (FIDO2 PRF /
+`hmac-secret` through Windows WebAuthn) and open with the official `age` tool and
+the recovery key on any system. Security keys require Windows 11 22H2 or later.
+`hid-fido2-age.exe` offers the same operations from the command line. See
 [file and folder encryption](docs/file-encryption.md).
 
 ## Security and recovery
@@ -183,7 +180,7 @@ Read the [security model](SECURITY.md) and [recovery instructions](docs/recovery
 | `src/credential_provider` | COM provider, serialization and public diagnostics |
 | `src/ctap` | CTAP2, PIN protocol, USB HID and protection checks |
 | `src/vault`, `src/password` | Machine vault and authenticated encryption |
-| `src/age` | age file format, FIDO2 PRF recipients and `hid-fido2-age` |
+| `src/age` | age file format, FIDO2 PRF recipients, file helper and command line |
 | `src/ui`, `resources` | Native dialogs, icon and version resources |
 | `include/hidfido` | Shared interfaces |
 | `tests` | Automated isolated tests |

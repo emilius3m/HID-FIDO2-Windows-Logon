@@ -57,17 +57,25 @@ void transactions() {
     FakeBackend first; first.fail = "activate-new"; const auto initial = transact(first, false); check(!initial.restored && !initial.recovery_required && first.trace.back() == "cleanup-new", "First-install cleanup attempted an old activation");
 }
 void native_manifest_profile() {
-    const auto paths = hidfido::installer::native_payload_paths(); check(paths.size() == 4, "Native runtime unexpectedly contains additional payload");
+    const auto paths = hidfido::installer::native_payload_paths(); check(paths.size() == 5, "Native runtime unexpectedly contains additional payload");
     for (const auto path : paths) check(path.ends_with(".exe") || path.ends_with(".dll"), "Native package contains scripts");
     const std::string hash(64, 'a'); std::string identity = "HID-FIDO2-WinLogon/release/1\n0.6.0\n8664", files;
     for (const auto path : paths) { identity += "\n" + std::string(path) + "=" + hash; if (!files.empty()) files += ','; files += "{\"Path\":" + json_string(path) + ",\"Length\":1,\"Sha256\":" + json_string(hash) + '}'; }
     const auto id = hidfido::installer::sha256_hex({reinterpret_cast<const std::uint8_t*>(identity.data()), identity.size()});
     const auto data = "{\"Schema\":1,\"ProjectId\":\"HID-FIDO2-WinLogon\",\"ProviderClsid\":" + json_string(narrow(provider_clsid)) + ",\"Architecture\":\"8664\",\"VaultSchema\":2,\"Version\":\"0.6.0\",\"ReleaseId\":" + json_string(id) + ",\"Files\":[" + files + "]}";
-    const auto manifest = hidfido::installer::parse_manifest({reinterpret_cast<const std::uint8_t*>(data.data()), data.size()}); check(manifest.native_management && manifest.files.size() == 4, "Native manifest rejected");
+    const auto manifest = hidfido::installer::parse_manifest({reinterpret_cast<const std::uint8_t*>(data.data()), data.size()}); check(manifest.native_management && manifest.files.size() == 5, "Native manifest rejected");
+    // An installed 0.9.0 release (no file-encryption helper) must stay readable for update and rollback.
+    std::string legacy_identity = "HID-FIDO2-WinLogon/release/1\n0.9.0\n8664", legacy_files;
+    for (const auto path : paths) { if (path == "bin/hid-fido2-files.exe") continue; legacy_identity += "\n" + std::string(path) + "=" + hash; if (!legacy_files.empty()) legacy_files += ','; legacy_files += "{\"Path\":" + json_string(path) + ",\"Length\":1,\"Sha256\":" + json_string(hash) + '}'; }
+    const auto legacy_id = hidfido::installer::sha256_hex({reinterpret_cast<const std::uint8_t*>(legacy_identity.data()), legacy_identity.size()});
+    const auto legacy = "{\"Schema\":1,\"ProjectId\":\"HID-FIDO2-WinLogon\",\"ProviderClsid\":" + json_string(narrow(provider_clsid)) + ",\"Architecture\":\"8664\",\"VaultSchema\":2,\"Version\":\"0.9.0\",\"ReleaseId\":" + json_string(legacy_id) + ",\"Files\":[" + legacy_files + "]}";
+    check(hidfido::installer::parse_manifest({reinterpret_cast<const std::uint8_t*>(legacy.data()), legacy.size()}).files.size() == 4, "Installed 0.9.0 release no longer readable");
+    auto partial = data; const auto helper = partial.find("{\"Path\":\"bin/hid-fido2-files.exe\""); partial.erase(helper, partial.find('}', helper) - helper + 2);
+    rejects([&] { hidfido::installer::parse_manifest({reinterpret_cast<const std::uint8_t*>(partial.data()), partial.size()}); }, "Mixed payload set accepted");
     auto altered = data; const auto pos = altered.find("Gestione-HID-FIDO2.exe"); altered.replace(pos, 21, "scripts/evil.ps1"); rejects([&] { hidfido::installer::parse_manifest({reinterpret_cast<const std::uint8_t*>(altered.data()), altered.size()}); }, "Native script substitution accepted");
 }
 }
 int main() {
-    try { json_boundaries(); metadata_and_actions(); transactions(); native_manifest_profile(); std::cout << "Native manager: bounded metadata, Unicode, fixed actions, last-key policy, staged update, rollback and four-binary profile passed. No host registry/vault accessed.\n"; return 0; }
+    try { json_boundaries(); metadata_and_actions(); transactions(); native_manifest_profile(); std::cout << "Native manager: bounded metadata, Unicode, fixed actions, last-key policy, staged update, rollback and five-binary profile (0.9.0 releases readable) passed. No host registry/vault accessed.\n"; return 0; }
     catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

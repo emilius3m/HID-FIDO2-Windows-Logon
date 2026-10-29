@@ -22,8 +22,9 @@ autenticazione Windows. Mantieni una password Windows funzionante per il recuper
 - Hash del pacchetto, pin dell'editore, Authenticode e firma del manifest.
 - Applicazione e installer senza PowerShell, .NET, browser, driver USB
   personalizzati o servizi di rete.
-- Strumento separato `hid-fido2-age`: cifra file e cartelle nel formato standard
-  age per la chiave principale, quella di riserva e una chiave di recupero su carta.
+- Scheda **File** e menu di Esplora file: cifra file e cartelle nel formato
+  standard age, in modo che si aprano con la Principale, la Riserva o una
+  chiave di recupero su carta.
 
 Versione attuale: **0.9.0** ([novità e verifiche](docs/release-notes-0.9.md)).
 Il pacchetto di installazione è un'anteprima sperimentale non firmata.
@@ -145,6 +146,7 @@ installa o registra componenti. La directory generata contiene:
 ```text
 Gestione-HID-FIDO2.exe
 bin/HidFido2CredentialProvider.dll
+bin/hid-fido2-files.exe
 bin/hid-fido2-vault.exe
 bin/provider-smoke.exe
 release.json
@@ -171,30 +173,24 @@ password salvata**. Consulta la [guida d'uso](docs/usage.md).
 
 ## Cifratura di file e cartelle
 
-`hid-fido2-age.exe` cifra file e cartelle in modo che possano aprirli la chiave
-Principale, la chiave Riserva oppure una chiave di recupero stampata su carta.
-Usa il formato standard [age](https://age-encryption.org/v1) (PRF FIDO2 /
-`hmac-secret` tramite WebAuthn di Windows, senza diritti di amministratore) ed è
-indipendente dall'accesso a Windows.
+Nel gestore, scheda **File**, aggiungi una volta la Principale e la Riserva e
+crea una chiave di recupero su carta. Poi usa **Cifra file…**, **Cifra
+cartella…** e **Decifra…**, oppure il tasto destro in Esplora file dopo aver
+attivato il menu.
 
-```cmd
-hid-fido2-age --new-key Principale --profile destinatari.txt
-hid-fido2-age --new-key Riserva --profile destinatari.txt
-hid-fido2-age --new-recovery --profile destinatari.txt
-hid-fido2-age --encrypt Documenti --profile destinatari.txt
-hid-fido2-age --decrypt Documenti.tar.age --profile destinatari.txt
-```
-
-- Il profilo `destinatari.txt` contiene solo dati pubblici: conservane una copia
-  insieme ai file cifrati.
+- Per cifrare servono un PIN e un tocco per **ciascuna** chiavetta del profilo;
+  per aprire basta una chiavetta qualsiasi oppure la chiave su carta. Una
+  cartella diventa un unico file `NOME.tar.age`: un tocco per chiave,
+  indipendentemente dal numero di file.
 - La chiave di recupero viene mostrata **una sola volta**: scrivila o stampala
   e conservala lontano dalle chiavette. Non viene salvata sul computer.
-- Per cifrare servono un PIN e un tocco per **ciascuna** chiavetta del profilo;
-  per decifrare basta una chiavetta qualsiasi, oppure `--recovery` con la chiave
-  su carta. Una cartella diventa un unico file `NOME.tar.age`: un tocco per
-  chiave, indipendentemente dal numero di file.
+- Il PIN si digita solo nella finestra di Windows. Le operazioni girano con i
+  normali diritti dell'utente, senza UAC, e non sovrascrivono mai file esistenti.
+- Il profilo `destinatari.txt` contiene solo dati pubblici: conservane una copia
+  insieme ai file cifrati.
 - Le chiavette richiedono Windows 11 22H2 o successivo. Con la chiave di recupero
   i file si aprono anche con il programma `age` ufficiale su qualsiasi sistema.
+  `hid-fido2-age.exe` offre le stesse operazioni da riga di comando.
 
 Dettagli, limiti e note di sicurezza (in inglese) sono in
 [file and folder encryption](docs/file-encryption.md).
@@ -229,7 +225,7 @@ un certificato reale e una [procedura di firma](docs/signing.md) convalidata.
 | `src/credential_provider` | Provider COM, serializzazione e diagnostica pubblica |
 | `src/ctap` | CTAP2, PIN protocol, USB HID e prove di protezione |
 | `src/vault`, `src/password` | Archivio macchina e cifratura autenticata |
-| `src/age` | Formato age, destinatari FIDO2 PRF e `hid-fido2-age` |
+| `src/age` | Formato age, destinatari FIDO2 PRF, helper dei file e riga di comando |
 | `src/ui`, `resources` | Dialoghi nativi, icona e risorse di versione |
 | `include/hidfido` | Interfacce condivise |
 | `tests` | Test automatici isolati |

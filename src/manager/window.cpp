@@ -14,8 +14,10 @@ using ui::tr;
 
 constexpr UINT complete_message = WM_APP + 20, capture_message = WM_APP + 21;
 constexpr wchar_t title[] = L"Gestione HID FIDO2";
-enum { nav_overview = 100, nav_keys, nav_settings, refresh_id = 200, close_id, primary_id, verify_id, proof_id, add_id, remove_id, windows_password_id, password_id, backup_id, restore_id, install_id, uninstall_id, recovery_id, legacy_id, language_id, rename_id, setup_id, setup_action_id, recovery_check_id, trial_primary_id, trial_spare_id, trial_restart_id, trace_start_id, trace_stop_id, support_report_id,
-back_id = 300, instructions_id, support_info_id, password_section_id, install_section_id, support_section_id, setup_cancel_id, setup_help_id, key_list_id, key_details_id };
+enum { nav_overview = 100, nav_keys, nav_settings, nav_files, refresh_id = 200, close_id, primary_id, verify_id, proof_id, add_id, remove_id, windows_password_id, password_id, backup_id, restore_id, install_id, uninstall_id, recovery_id, legacy_id, language_id, rename_id, setup_id, setup_action_id, recovery_check_id, trial_primary_id, trial_spare_id, trial_restart_id, trace_start_id, trace_stop_id, support_report_id,
+back_id = 300, instructions_id, support_info_id, password_section_id, install_section_id, support_section_id, setup_cancel_id, setup_help_id, key_list_id, key_details_id,
+files_encrypt_id = 400, files_folder_id, files_decrypt_id, files_key_id, files_recovery_id, files_shell_id, files_profile_id };
+constexpr int files_page = 8;
 bool confirm(HWND parent, const wchar_t* text) { return MessageBoxW(parent, text, tr(title), MB_YESNO | MB_DEFBUTTON2 | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES; }
 void error(HWND parent, const wchar_t* text) { MessageBoxW(parent, text, tr(title), MB_OK | MB_ICONERROR | MB_SETFOREGROUND); }
 void technical_error(HWND parent, const wchar_t* details) {
@@ -130,8 +132,8 @@ private:
         if (previous) ImageList_Destroy(previous);
     }
     void create() {
-        const wchar_t* names[]{L"Accesso", L"Chiavi", L"Impostazioni"};
-        for (int i = 0; i < 3; ++i) nav_[i] = button(names[i], nav_overview + i, -1);
+        const wchar_t* names[]{L"Accesso", L"Chiavi", L"File", L"Impostazioni"}; const int ids[]{nav_overview, nav_keys, nav_files, nav_settings};
+        for (int i = 0; i < 4; ++i) nav_[i] = button(names[i], ids[i], -1);
         heading_ = text(L""); back_ = button(L"‹ Impostazioni", back_id, -1, false, true);
         summary_ = text(L"Lettura dello stato…", 0); overview_detail_ = text(L"", 0);
         primary_ = button(L"Prova una chiave", primary_id, 0, true);
@@ -171,14 +173,23 @@ private:
         SendMessageW(language_select_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Italiano")); SendMessageW(language_select_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"English"));
         SendMessageW(language_select_, CB_SETCURSEL, ui::language() == ui::Language::italian ? 0 : 1, 0);
         version_ = text(L"HID FIDO2 · 0.9.0", 6);
+        files_status_ = text(L"", files_page);
+        files_encrypt_ = button(L"Cifra file…", files_encrypt_id, files_page, true); files_folder_ = button(L"Cifra cartella…", files_folder_id, files_page); files_decrypt_ = button(L"Decifra…", files_decrypt_id, files_page);
+        files_heading_ = text(L"Chiavi per i file", files_page);
+        files_key_ = button(L"Aggiungi chiave…", files_key_id, files_page); files_recovery_ = button(L"Crea chiave di recupero…", files_recovery_id, files_page);
+        files_shell_ = make(L"BUTTON", L"Mostra «Cifra» e «Decifra» nel menu del tasto destro di Esplora file", BS_AUTOCHECKBOX | BS_MULTILINE | WS_TABSTOP, files_shell_id, files_page);
+        files_profile_ = button(L"Apri la cartella del profilo", files_profile_id, files_page, false, true);
+        files_note_ = text(L"Per cifrare servono tutte le chiavi del profilo, una alla volta. Per aprire un file basta una chiave o la chiave di recupero su carta.", files_page);
         footer_ = text(L""); refresh_ = button(L"Aggiorna stato", refresh_id, -1, false, true); progress_ = make(PROGRESS_CLASSW, L"", PBS_MARQUEE);
         demo_guide_.create(window_); demo_guide_.visible(false);
+        // Explorer entries follow the running release and the current language.
+        if (!options_.demo) refresh_files_shell(files_helper());
         fonts(); SendMessageW(window_, WM_CHANGEUISTATE, MAKEWPARAM(UIS_SET, UISF_HIDEFOCUS), 0); refresh(); change_page(options_.preview_step ? 7 : 0); SetTimer(window_, 1, 250, nullptr);
     }
     void layout() {
         RECT area{}; GetClientRect(window_, &area); const int width = MulDiv(area.right, 96, static_cast<int>(dpi_)), height = MulDiv(area.bottom, 96, static_cast<int>(dpi_));
         const int left = 48, content = width - 96, centre = std::max(left, (width - 600) / 2);
-        for (int i = 0; i < 3; ++i) { box(nav_[i], 36 + i * 150, 8, i == 2 ? 170 : 136, 46); ShowWindow(nav_[i], page_ == 4 || page_ == 7 ? SW_HIDE : SW_SHOW); }
+        for (int i = 0; i < 4; ++i) { box(nav_[i], 36 + i * 150, 8, i == 3 ? 170 : 136, 46); ShowWindow(nav_[i], page_ == 4 || page_ == 7 ? SW_HIDE : SW_SHOW); }
         box(heading_, left, 91, content - 235, 44); box(back_, left - 8, 69, 180, 30);
         ShowWindow(back_, page_ == 2 || page_ == 3 || page_ == 5 ? SW_SHOW : SW_HIDE);
         ShowWindow(heading_, page_ == 0 || page_ == 4 || page_ == 7 ? SW_HIDE : SW_SHOW);
@@ -202,27 +213,74 @@ private:
         box(support_toggle_, left - 7, 404, 310, 38); box(support_privacy_, left, 452, content, std::min(96, height - 494)); ShowWindow(support_privacy_, page_ == 5 && support_open_ ? SW_SHOW : SW_HIDE);
         box(password_section_, left, 170, content, 56); box(install_section_, left, 237, content, 56); box(support_section_, left, 304, content, 56);
         box(language_label_, left + 8, 396, 250, 30); box(language_select_, width - 252, 388, 204, 140); box(version_, left + 8, 470, content, 28);
+        box(files_status_, left, 167, content, 50); box(files_encrypt_, left, 225, 200, 40); box(files_folder_, left + 214, 225, 200, 40); box(files_decrypt_, left + 428, 225, 160, 40);
+        box(files_heading_, left, 296, content, 29); box(files_key_, left, 334, 200, 40); box(files_recovery_, left + 214, 334, 250, 40);
+        box(files_shell_, left, 394, content, 44); box(files_note_, left, 444, content, std::min(44, height - 486)); box(files_profile_, left - 6, std::min(492, height - 76), 280, 34);
         box(footer_, left, height - 32, content - 170, 24); box(refresh_, width - 211, height - 40, 163, 31); box(progress_, left, height - 5, content, 4);
         ShowWindow(refresh_, !busy_ && page_ != 4 && page_ != 7 ? SW_SHOW : SW_HIDE); ShowWindow(footer_, page_ == 4 || page_ == 7 ? SW_HIDE : SW_SHOW);
         if (page_ == 7) demo_guide_.layout();
         InvalidateRect(window_, nullptr, TRUE);
     }
     void change_page(int page) {
-        page_ = page; const wchar_t* titles[]{L"Accesso", L"Le tue chiavi", L"Password e recupero", L"Installazione", L"Configurazione guidata", L"Assistenza", L"Impostazioni", L"Configurazione guidata"};
+        page_ = page; const wchar_t* titles[]{L"Accesso", L"Le tue chiavi", L"Password e recupero", L"Installazione", L"Configurazione guidata", L"Assistenza", L"Impostazioni", L"Configurazione guidata", L"File cifrati"};
         SetWindowTextW(heading_, tr(titles[page]));
-        for (int i = 0; i < 7; ++i) for (const auto h : pages_[i]) ShowWindow(h, i == page ? SW_SHOW : SW_HIDE);
+        for (int i = 0; i < static_cast<int>(pages_.size()); ++i) for (const auto h : pages_[i]) ShowWindow(h, i == page ? SW_SHOW : SW_HIDE);
+        if (page == files_page) refresh_files();
         demo_guide_.visible(page == 7);
         for (const auto nav : nav_) InvalidateRect(nav, nullptr, TRUE);
         if (page == 7) { demo_guide_.show(options_.preview_step.value_or(ui::GuideStep::touch), L"Principale"); EnableWindow(demo_guide_.edit(), FALSE); EnableWindow(demo_guide_.accept(), FALSE); }
         layout(); states();
-        if (page != 7) SetFocus(page == 4 ? setup_action_ : nav_[page == 0 ? 0 : page == 1 ? 1 : 2]);
+        if (page != 7) SetFocus(page == 4 ? setup_action_ : nav_[nav_index()]);
     }
     void change_language() {
         if (busy_) return; const auto selection = SendMessageW(language_select_, CB_GETCURSEL, 0, 0); if (selection != 0 && selection != 1) return;
         const auto next = selection == 0 ? ui::Language::italian : ui::Language::english;
         if (!options_.demo && !ui::save_preferred_language(next)) { error(window_, tr(L"Impossibile salvare la lingua. Riapri il gestore come amministratore e riprova.")); return; }
         ui::set_language(next); for (const auto& [control, key] : labels_) SetWindowTextW(control, tr(key));
+        if (!options_.demo) refresh_files_shell(files_helper());
         SetWindowTextW(window_, options_.demo ? tr(L"HID FIDO2 · Anteprima") : L"HID FIDO2"); refresh(); change_page(page_);
+    }
+    int nav_index() const noexcept { return page_ == 0 ? 0 : page_ == 1 ? 1 : page_ == files_page ? 2 : 3; }
+    std::filesystem::path files_helper() const { return package_ / L"bin" / L"hid-fido2-files.exe"; }
+    void refresh_files() {
+        if (options_.demo) { files_ = {}; files_.profile = true; files_.keys = {L"Principale", L"Riserva"}; files_.recovery = {tr(L"Recupero su carta")}; }
+        else files_ = observe_files();
+        std::wstring text;
+        if (!files_.readable) text = tr(L"Il profilo dei destinatari non è leggibile. Apri la cartella del profilo e controlla il file destinatari.txt.");
+        else if (!files_.profile) text = tr(L"Nessuna chiave per i file. Aggiungi la Principale, la Riserva e una chiave di recupero su carta.");
+        else {
+            std::wstring keys; for (const auto& key : files_.keys) keys += (keys.empty() ? L"" : L", ") + key;
+            text = tr(L"Chiavi: ") + (keys.empty() ? std::wstring(tr(L"nessuna")) : keys) + L"\r\n" +
+                   (files_.recovery.empty() ? tr(L"Chiave di recupero su carta: non ancora creata.") : tr(L"Chiave di recupero su carta: presente."));
+        }
+        SetWindowTextW(files_status_, text.c_str());
+        SendMessageW(files_shell_, BM_SETCHECK, !options_.demo && files_shell_enabled() ? BST_CHECKED : BST_UNCHECKED, 0);
+        states();
+    }
+    void files(FilesAction action) {
+        if (options_.demo) return;
+        std::wstring label;
+        if (action == FilesAction::add_key) {
+            label = ask_label(window_, files_.keys.empty() ? L"Principale" : files_.keys.size() == 1 ? L"Riserva" : L"");
+            if (label.empty()) return;
+            if (std::find(files_.keys.begin(), files_.keys.end(), label) != files_.keys.end()) { error(window_, tr(L"Esiste già una chiave con questa etichetta.")); return; }
+        }
+        if (action == FilesAction::add_recovery && !files_.recovery.empty() &&
+            !confirm(window_, tr(L"Esiste già una chiave di recupero. Crearne un'altra? Quella attuale continuerà ad aprire i file."))) return;
+        start_files_helper(files_helper(), files_arguments(action, label));
+        SetWindowTextW(footer_, tr(L"Continua nella finestra «File cifrati»."));
+    }
+    void files_shell() {
+        if (options_.demo) return;
+        const bool enabled = SendMessageW(files_shell_, BM_GETCHECK, 0, 0) == BST_CHECKED;
+        try { set_files_shell(files_helper(), enabled); }
+        catch (...) { SendMessageW(files_shell_, BM_SETCHECK, enabled ? BST_UNCHECKED : BST_CHECKED, 0); throw; }
+        SetWindowTextW(footer_, enabled ? tr(L"Menu di Esplora file attivo. In Windows 11 le voci sono in «Mostra altre opzioni».") : tr(L"Menu di Esplora file rimosso."));
+    }
+    void files_profile_folder() {
+        const auto folder = files_profile_path().parent_path();
+        if (!std::filesystem::exists(folder)) { MessageBoxW(window_, tr(L"Il profilo verrà creato quando aggiungi la prima chiave."), tr(title), MB_OK | MB_ICONINFORMATION); return; }
+        ShellExecuteW(window_, L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     }
     std::wstring selected_key() const { const auto index = ListView_GetNextItem(key_list_, -1, LVNI_SELECTED); return index >= 0 && static_cast<std::size_t>(index) < status_.keys.size() ? status_.keys[index].label : L""; }
     void key_menu(int index = -1) {
@@ -327,6 +385,9 @@ private:
         EnableWindow(uninstall_, !options_.demo && !busy_ && status_.has_deployment); EnableWindow(legacy_, !options_.demo && !busy_ && signer_pin().empty() && status_.registered && verified < 2);
         EnableWindow(primary_, !busy_); EnableWindow(language_select_, !busy_); EnableWindow(refresh_, !busy_);
         for (const auto nav : nav_) EnableWindow(nav, !busy_); EnableWindow(back_, !busy_);
+        const bool files_ready = !busy_ && !options_.demo && files_.readable;
+        EnableWindow(files_encrypt_, files_ready && files_.profile); EnableWindow(files_folder_, files_ready && files_.profile); EnableWindow(files_decrypt_, !busy_ && !options_.demo);
+        EnableWindow(files_key_, files_ready); EnableWindow(files_recovery_, files_ready); EnableWindow(files_shell_, !busy_ && !options_.demo); EnableWindow(files_profile_, !options_.demo);
         SendMessageW(progress_, PBM_SETMARQUEE, busy_, 35); ShowWindow(progress_, busy_ ? SW_SHOW : SW_HIDE);
         setup_state(); support_state();
     }
@@ -352,7 +413,7 @@ private:
             const auto installed = tr(L"Versione installata: ") + (status_.provider_version.empty() ? tr(L"non presente") : status_.provider_version); SetWindowTextW(installed_detail_, installed.c_str());
             SetWindowTextW(footer_, options_.demo ? tr(L"Anteprima · dati di esempio") : L"");
         } catch (const std::exception& failure) { status_.observed = false; SetWindowTextW(summary_, tr(L"Stato non disponibile")); SetWindowTextW(overview_detail_, tr(L"Usa la password Windows per il recupero.")); technical_error(window_, widen(failure.what()).c_str()); }
-        states();
+        states(); if (page_ == files_page) refresh_files();
     }
     void vault(VaultAction action, std::wstring selection = {}, std::wstring replacement = {}) {
         if (!can_run(status_, action, busy_, options_.demo)) return;
@@ -395,7 +456,8 @@ private:
     void command(int id) {
         if (page_ == 7 && id == ui::GuidanceView::cancel_id) { change_page(0); return; }
         if (page_ == 7 && id == ui::GuidanceView::help_id) { MessageBoxW(window_, tr(L"Segui un passaggio alla volta. Usa il PIN della chiave e tocca il sensore solo quando richiesto. Puoi annullare e usare la password Windows."), L"HID FIDO2", MB_OK | MB_ICONINFORMATION); return; }
-        if (id >= nav_overview && id <= nav_settings) { if (!busy_) change_page(id == nav_settings ? 6 : id - nav_overview); return; }
+        if (id >= nav_overview && id <= nav_files) { if (!busy_) change_page(id == nav_settings ? 6 : id == nav_files ? files_page : id - nav_overview); return; }
+        if (id == files_profile_id) { files_profile_folder(); return; }
         if (id == language_id) { change_language(); return; }
         if (id == instructions_id) { instructions_open_ = !instructions_open_; layout(); return; }
         if (id == support_info_id) { support_open_ = !support_open_; layout(); return; }
@@ -424,6 +486,9 @@ private:
         case restore_id: { const auto selected = SendMessageW(backups_, CB_GETCURSEL, 0, 0); if (selected >= 0 && static_cast<std::size_t>(selected) < status_.backups.size()) vault(VaultAction::restore, widen(status_.backups[selected].id)); break; }
         case windows_password_id: ShellExecuteW(window_, L"open", L"ms-settings:signinoptions", nullptr, nullptr, SW_SHOWNORMAL); break;
         case install_id: deploy(false); break; case uninstall_id: deploy(true); break; case legacy_id: states(); layout(); break;
+        case files_encrypt_id: files(FilesAction::encrypt_file); break; case files_folder_id: files(FilesAction::encrypt_folder); break;
+        case files_decrypt_id: files(FilesAction::decrypt); break; case files_key_id: files(FilesAction::add_key); break;
+        case files_recovery_id: files(FilesAction::add_recovery); break; case files_shell_id: files_shell(); break;
         case trace_start_id: if (support_trace_.running()) support_trace_.stop(); else { support_trace_.start(); helper_report_.clear(); helper_incomplete_ = false; last_exit_code_.reset(); } states(); break;
         }
     }
@@ -451,8 +516,9 @@ private:
         if (!options_.demo || options_.snapshot.empty()) return; reject_reparse(options_.snapshot); std::filesystem::create_directories(options_.snapshot);
         Gdiplus::GdiplusStartupInput input; ULONG_PTR token{}; if (Gdiplus::GdiplusStartup(&token, &input, nullptr) != Gdiplus::Ok) throw std::runtime_error("PNG renderer unavailable");
         const CLSID png{0x557cf406, 0x1a04, 0x11d3, {0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e}};
-        for (int page = options_.preview_step ? 7 : 0; page < 8; ++page) {
-            if (page == 7 && !options_.preview_step) break; change_page(page); RedrawWindow(window_, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+        const std::vector<int> pages = options_.preview_step ? std::vector<int>{7} : std::vector<int>{0, 1, 2, 3, 4, 5, 6, files_page};
+        for (const int page : pages) {
+            change_page(page); RedrawWindow(window_, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
             RECT area{}; GetWindowRect(window_, &area); const auto dc = GetDC(window_), memory = CreateCompatibleDC(dc); const auto bitmap = CreateCompatibleBitmap(dc, area.right - area.left, area.bottom - area.top); const auto old = SelectObject(memory, bitmap);
             SendMessageW(window_, WM_PRINT, reinterpret_cast<WPARAM>(memory), PRF_CLIENT | PRF_CHILDREN | PRF_ERASEBKGND | PRF_NONCLIENT);
             // Native dropdowns omit selected text from hidden-window WM_PRINT.
@@ -517,12 +583,13 @@ private:
                 if (header->code == NM_CLICK || header->code == NM_RCLICK || header->code == NM_DBLCLK) { const auto* item = reinterpret_cast<NMITEMACTIVATE*>(l); if (item->iItem >= 0 and static_cast<std::size_t>(item->iItem) < self->status_.keys.size()) { if (header->code == NM_CLICK && item->iSubItem == 1 && self->status_.keys[item->iItem].proof == "unknown" && !self->options_.demo) self->vault(VaultAction::verify_protection, self->status_.keys[item->iItem].label); else if (header->code != NM_CLICK || item->iSubItem == 2) self->key_menu(item->iItem); } }
                 else if (header->code == LVN_KEYDOWN) { const auto key = reinterpret_cast<NMLVKEYDOWN*>(l)->wVKey; if (key == VK_RETURN || key == VK_SPACE || key == VK_APPS || (key == VK_F10 && GetKeyState(VK_SHIFT) < 0)) self->key_menu(); } return 0; }
             case WM_CONTEXTMENU: if (reinterpret_cast<HWND>(w) == self->key_list_) { self->key_menu(); return 0; } break;
+            case WM_ACTIVATE: if (LOWORD(w) != WA_INACTIVE && self->page_ == files_page) self->refresh_files(); break;
             case WM_TIMER: self->tick(); return 0; case complete_message: self->completed(reinterpret_cast<JobResult*>(l)); return 0; case capture_message: self->snapshot(); return 0;
             case WM_DRAWITEM: {
                 const auto& item = *reinterpret_cast<DRAWITEMSTRUCT*>(l);
-                if (item.CtlID >= nav_overview && item.CtlID <= nav_settings) {
-                    ui::draw_guide_button(item, false, true, true); const int selected = self->page_ == 0 ? 0 : self->page_ == 1 ? 1 : 2;
-                    if (item.CtlID == static_cast<unsigned>(nav_overview + selected)) { const auto pen = CreatePen(PS_SOLID, self->scale(2), RGB(32, 33, 36)); const auto old = SelectObject(item.hDC, pen); MoveToEx(item.hDC, item.rcItem.left + self->scale(12), item.rcItem.bottom - self->scale(2), nullptr); LineTo(item.hDC, item.rcItem.right - self->scale(12), item.rcItem.bottom - self->scale(2)); SelectObject(item.hDC, old); DeleteObject(pen); } return TRUE;
+                if (item.CtlID >= nav_overview && item.CtlID <= nav_files) {
+                    ui::draw_guide_button(item, false, true, true);
+                    if (item.hwndItem == self->nav_[self->nav_index()]) { const auto pen = CreatePen(PS_SOLID, self->scale(2), RGB(32, 33, 36)); const auto old = SelectObject(item.hDC, pen); MoveToEx(item.hDC, item.rcItem.left + self->scale(12), item.rcItem.bottom - self->scale(2), nullptr); LineTo(item.hDC, item.rcItem.right - self->scale(12), item.rcItem.bottom - self->scale(2)); SelectObject(item.hDC, old); DeleteObject(pen); } return TRUE;
                 }
                 if (item.CtlID >= password_section_id && item.CtlID <= support_section_id) {
                     FillRect(item.hDC, &item.rcItem, self->white_); SelectObject(item.hDC, self->font_); SetBkMode(item.hDC, TRANSPARENT); SetTextColor(item.hDC, RGB(32, 33, 36));
@@ -546,13 +613,14 @@ private:
     }
     WindowOptions options_; std::filesystem::path package_; std::wstring sid_; Status status_; HWND window_{}; UINT dpi_{96}; bool busy_{}, instructions_open_{}, support_open_{}, home_ready_{}; int page_{};
     HBRUSH white_{CreateSolidBrush(RGB(255, 255, 255))}; HFONT font_{}, large_{}, bold_{}; HIMAGELIST rows_{};
-    std::vector<HWND> controls_, primary_buttons_, link_buttons_; std::vector<std::pair<HWND, const wchar_t*>> labels_; std::array<std::vector<HWND>, 7> pages_; std::array<HWND, 3> nav_{};
+    std::vector<HWND> controls_, primary_buttons_, link_buttons_; std::vector<std::pair<HWND, const wchar_t*>> labels_; std::array<std::vector<HWND>, 9> pages_; std::array<HWND, 4> nav_{};
     Handle pending_; std::thread worker_; SetupChecks setup_checks_; std::string trials_binding_; ui::GuideArt setup_art_{ui::GuideArt::insert}; ui::GuidanceView demo_guide_;
     SupportTrace support_trace_; std::optional<unsigned> last_exit_code_; std::filesystem::path helper_report_path_; std::vector<Handle> report_pins_; std::string helper_report_; bool helper_incomplete_{};
     HWND heading_{}, back_{}, summary_{}, overview_detail_{}, primary_{}, instructions_toggle_{}, instructions_{}, recovery_link_{}, key_list_{}, add_{}, key_note_{};
     HWND password_heading_{}, password_{}, settings_{}, backups_heading_{}, backups_{}, backup_{}, restore_{}, lost_{}, installed_heading_{}, installed_detail_{}, trust_{}, legacy_{}, legacy_note_{}, install_{}, uninstall_{}, setup_link_{};
     HWND setup_stage_{}, setup_detail_{}, setup_steps_{}, setup_action_{}, setup_cancel_{}, recovery_check_{}, setup_help_{}, trace_state_{}, support_heading_{}, trace_start_{}, support_report_{}, support_toggle_{}, support_privacy_{};
     HWND password_section_{}, install_section_{}, support_section_{}, language_label_{}, language_select_{}, version_{}, footer_{}, refresh_{}, progress_{};
+    HWND files_status_{}, files_encrypt_{}, files_folder_{}, files_decrypt_{}, files_heading_{}, files_key_{}, files_recovery_{}, files_shell_{}, files_profile_{}, files_note_{}; FilesStatus files_;
 };
 
 int show_manager(WindowOptions options, std::filesystem::path package, std::wstring sid, HINSTANCE instance, int show) { Manager app(std::move(options), std::move(package), std::move(sid)); return app.run(instance, show); }

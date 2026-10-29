@@ -47,7 +47,7 @@ administrators form part of the trust boundary. The design does not protect
 against compromise of those components, privileged debugging, malicious
 firmware, physical key extraction or a captured usable Windows password.
 
-The launcher validates the fixed four-binary package, hashes and trust
+The launcher validates the fixed five-binary package, hashes and trust
 profile before UAC, repeats validation after elevation and pins source files
 against replacement. Operations use a protected immutable copy. The manager
 uses a static CRT and restricted system-DLL loading. Signature enforcement
@@ -84,3 +84,14 @@ artifacts in a public issue before coordinated disclosure. Never attach
 passwords, PINs, private keys, vault files, recovery keys or personal account
 identifiers. For ordinary bugs, provide a minimal reproduction, Windows
 version, key model and sanitized public error codes.
+
+## File encryption
+
+The File tab and the File Explorer menu start `hid-fido2-files.exe` from the
+protected release copy, with the user's normal rights. It encrypts in the age
+format for every key in the user's profile and an optional paper recovery key.
+Windows WebAuthn collects the key PIN; the recovery secret exists only in the
+helper window that shows or receives it. The profile contains public data only
+and is never trusted for anything but choosing recipients. Files encrypted for
+a lost or stolen key stay readable with that key and its PIN until they are
+re-encrypted. Details: [file and folder encryption](docs/file-encryption.md).

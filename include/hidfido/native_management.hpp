@@ -66,6 +66,20 @@ TransactionResult install_or_update(const std::filesystem::path& source, std::st
 void uninstall_provider();
 void create_shortcuts(const std::filesystem::path& protected_package);
 std::string package_release(const std::filesystem::path& build, const std::filesystem::path& output, std::string_view version, std::string_view pin);
+// Files page. The profile holds public recipient data only; every encryption
+// operation, key PIN and recovery secret stays in bin/hid-fido2-files.exe,
+// which runs with the signed-in user's normal rights whenever possible.
+struct FilesStatus { bool profile{}, readable{true}; std::vector<std::wstring> keys, recovery; };
+enum class FilesAction { encrypt_file, encrypt_folder, decrypt, add_key, add_recovery };
+std::filesystem::path files_profile_path();
+FilesStatus observe_files();
+std::vector<std::wstring> files_arguments(FilesAction action, std::wstring_view label = {});
+void start_files_helper(const std::filesystem::path& helper, const std::vector<std::wstring>& arguments);
+// Explorer context menu for the current user only (HKCU). Never replaces an
+// existing default program for .age files.
+bool files_shell_enabled();
+void set_files_shell(const std::filesystem::path& helper, bool enabled);
+void refresh_files_shell(const std::filesystem::path& helper) noexcept;
 // Only metadata is captured. Interactive operations use separate native tools
 // without redirecting PIN/password dialogs or returning their buffers to UI.
 std::string capture_status(const std::filesystem::path& executable, std::wstring_view sid);

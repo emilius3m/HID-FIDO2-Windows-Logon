@@ -14,7 +14,12 @@
 
 namespace hidfido::installer {
 namespace {
-constexpr std::array<std::string_view, 4> native_paths{
+constexpr std::array<std::string_view, 5> native_paths{
+    "bin/HidFido2CredentialProvider.dll", "bin/hid-fido2-files.exe", "bin/hid-fido2-vault.exe",
+    "bin/provider-smoke.exe", "Gestione-HID-FIDO2.exe"};
+// Releases up to 0.9.0 had no file-encryption helper. Their manifests stay
+// readable so that an installed release can be updated or restored.
+constexpr std::array<std::string_view, 4> release_0_9_paths{
     "bin/HidFido2CredentialProvider.dll", "bin/hid-fido2-vault.exe",
     "bin/provider-smoke.exe", "Gestione-HID-FIDO2.exe"};
 [[noreturn]] void invalid() { throw std::runtime_error("Package trust validation failed"); }
@@ -225,8 +230,9 @@ Manifest parse_manifest(std::span<const std::uint8_t> data) {
     for (char c : manifest.version) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '.' || c == '-')) invalid();
     const auto& files = member(root, "Files");
     if (files.kind != Json::Kind::array) invalid();
-    const auto expected_paths = native_payload_paths();
-    if (files.array.size() != expected_paths.size()) invalid();
+    const std::span<const std::string_view> expected_paths = files.array.size() == native_paths.size() ? std::span<const std::string_view>(native_paths)
+        : files.array.size() == release_0_9_paths.size() ? std::span<const std::string_view>(release_0_9_paths) : std::span<const std::string_view>{};
+    if (expected_paths.empty()) invalid();
     manifest.native_management = true;
     for (const auto expected : expected_paths) {
         const Json* selected{};

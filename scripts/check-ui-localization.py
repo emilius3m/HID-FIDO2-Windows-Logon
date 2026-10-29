@@ -28,7 +28,8 @@ def main():
         'src/ui/guided_ceremony.cpp', 'include/hidfido/guidance_view.hpp',
         'src/ui/secret_dialog.cpp', 'src/ui/user_messages.cpp',
         'src/vault/vault_tool.cpp', 'src/credential_provider/provider.cpp',
-        'src/credential_provider/serialization.cpp', 'src/age/age_tool.cpp')]
+        'src/credential_provider/serialization.cpp', 'src/age/age_tool.cpp', 'src/age/desktop.cpp',
+        'src/age/files_app.cpp', 'src/manager/files.cpp')]
     checked = 0
     for source in sources:
         text = source.read_text(encoding='utf-8')

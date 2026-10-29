@@ -76,6 +76,24 @@ numeric fields before report export. No generic status/exception serializer
 is used. The report adds only selected aggregate state, a read-only audit
 result and version information, with explicit preview and save.
 
+## File encryption
+
+The **File** page shows the user's recipient profile
+(`%APPDATA%\HID-FIDO2-WinLogon\Files\destinatari.txt`, public data only) and
+starts `bin/hid-fido2-files.exe` from the protected release. The elevated
+manager launches it through the desktop shell (`Shell.Application.ShellExecute`
+on Explorer's desktop window), so it runs with the user's normal rights; if no
+shell is available it starts directly. The helper owns all cryptographic work:
+WebAuthn PRF assertions, age encryption and decryption, recovery-key display,
+entry and printing. The same helper serves the optional File Explorer verbs,
+registered per user under `HKCU\Software\Classes` and re-pointed to the running
+release and language whenever the manager starts. An existing default program
+for `.age` files is never replaced.
+
+The portable age core (`src/age`) is shared by the helper, the
+`hid-fido2-age` command line and, as a static-CRT copy, the manager, which uses
+it only to read the profile.
+
 ## Interface language
 
 The shared UI catalog contains Italian and English text. The manager stores

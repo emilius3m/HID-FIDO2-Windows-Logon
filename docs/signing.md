@@ -18,17 +18,17 @@ cmake --build --preset release
 ```
 
 Replace placeholders before running commands. The pin is compiled into the
-manager; a runtime flag cannot select another publisher. All four payloads
+manager; a runtime flag cannot select another publisher. All five payloads
 must have a valid Authenticode signature from that certificate.
 
 ## Sign binaries, then package
 
 Use the Windows SDK [SignTool](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool)
-to sign and timestamp the four build outputs. Example with a certificate in
+to sign and timestamp the five build outputs. Example with a certificate in
 the current user's My store:
 
 ```cmd
-signtool sign /sha1 <certificate-thumbprint> /fd SHA256 /tr <timestamp-service-URL> /td SHA256 build\Release\Gestione-HID-FIDO2.exe build\Release\HidFido2CredentialProvider.dll build\Release\hid-fido2-vault.exe build\Release\provider-smoke.exe
+signtool sign /sha1 <certificate-thumbprint> /fd SHA256 /tr <timestamp-service-URL> /td SHA256 build\Release\Gestione-HID-FIDO2.exe build\Release\HidFido2CredentialProvider.dll build\Release\hid-fido2-files.exe build\Release\hid-fido2-vault.exe build\Release\provider-smoke.exe
 ```
 
 Use the appropriate store/provider options for the certificate. Do not keep

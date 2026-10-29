@@ -39,7 +39,7 @@ void replace(std::string& value, std::string_view from, std::string_view to) {
 void parser() {
     const auto good = manifest();
     const auto parsed = parse_manifest(bytes(good));
-    require(parsed.version == "0.6.0" && parsed.files.size() == 4, "Valid manifest not decoded");
+    require(parsed.version == "0.6.0" && parsed.files.size() == native_payload_paths().size(), "Valid manifest not decoded");
     auto duplicate = good; duplicate.insert(1, "\"Schema\":1,");
     rejects([&] { parse_manifest(bytes(duplicate)); }, "Duplicate manifest member accepted");
     auto escaped_duplicate = good; escaped_duplicate.insert(1, "\"\\u0053chema\":1,");

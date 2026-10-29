@@ -31,6 +31,9 @@ private:
 
 std::uint32_t api_version() noexcept;
 bool prf_available() noexcept;
+// Window (HWND) that owns the Windows security-key dialog; the foreground
+// window is used when none is set.
+void set_owner_window(void* window) noexcept;
 
 // Creates a non-discoverable credential with hmac-secret and user verification.
 // `label` (for example "Principale") is shown by Windows and stored on the key

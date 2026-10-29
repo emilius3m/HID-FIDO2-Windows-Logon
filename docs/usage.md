@@ -152,3 +152,12 @@ paths, credential IDs, salts, ciphertext and raw memory. PIN-field update
 events are discarded. An installation-check failure is included as a failed
 check without copying arbitrary exception text. Missing, truncated or
 invalid helper diagnostics are marked incomplete rather than exported raw.
+
+## Encrypted files
+
+The **File** tab encrypts files and folders so that the primary key, the
+backup key or a paper recovery key can open them. Add both keys and create the
+recovery key once, then use **Encrypt file…**, **Encrypt folder…** and
+**Decrypt…**, or enable the File Explorer menu. These operations do not need
+UAC and are independent of Windows sign-in. See
+[file and folder encryption](file-encryption.md).

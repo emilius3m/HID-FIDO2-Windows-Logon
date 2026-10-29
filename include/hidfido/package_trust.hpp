@@ -17,7 +17,10 @@ struct Manifest {
     bool native_management{};
 };
 // Pure, bounded manifest parsing and identity checks. No code is loaded.
+// Accepts the current payload set and the 0.9.0 set (without the
+// file-encryption helper), so installed releases can be updated or restored.
 Manifest parse_manifest(std::span<const std::uint8_t> bytes);
+// The payload set written by new packages.
 std::span<const std::string_view> native_payload_paths() noexcept;
 std::string sha256_hex(std::span<const std::uint8_t> bytes);
 bool valid_signer_pin(std::string_view text) noexcept;

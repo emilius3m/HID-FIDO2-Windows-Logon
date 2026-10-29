@@ -13,6 +13,7 @@
 #include <webauthn.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <memory>
 #include <vector>
@@ -107,7 +108,10 @@ std::string client_data(std::string_view type) {
            R"(","origin":"hid-fido2-age:","crossOrigin":false})";
 }
 
+std::atomic<HWND> owner_window{};
+
 HWND owner() noexcept {
+    if (const auto window = owner_window.load(); window && IsWindow(window)) return window;
     const auto window = GetForegroundWindow();
     return window ? window : GetConsoleWindow();
 }
@@ -138,6 +142,8 @@ bool Error::cancelled() const noexcept {
     return result_ == NTE_USER_CANCELLED || result_ == HRESULT_FROM_WIN32(ERROR_CANCELLED) ||
            result_ == HRESULT_FROM_WIN32(ERROR_TIMEOUT) || result_ == NTE_NOT_FOUND;
 }
+
+void set_owner_window(void* window) noexcept { owner_window.store(static_cast<HWND>(window)); }
 
 std::uint32_t api_version() noexcept { return api().complete() ? api().version() : 0; }
 

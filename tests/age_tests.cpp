@@ -3,6 +3,7 @@
 // authenticator computing HMAC-SHA-256(credRandom, hmac-secret salt).
 // Optional argument: a directory of C2SP age testkit vectors (tests/age-testkit).
 #include "hidfido/age.hpp"
+#include "hidfido/age_files.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -502,6 +503,114 @@ void folder_archives() {
     std::size_t offset = 0;
     rejects([&] { extract_tar(source_of(corrupted, offset), sandbox.path); }, "bad header checksum");
 }
+
+// ---- Shared file operations (command line, helper and manager) --------------------
+template<class Action>
+void fails_with(files::Problem expected, Action&& action, const std::string& message) {
+    try { action(); }
+    catch (const files::Error& error) {
+        require(error.problem() == expected, message + ": wrong problem");
+        return;
+    }
+    throw std::runtime_error("Accepted invalid input: " + message);
+}
+
+bool no_leftovers(const fs::path& folder) {
+    for (const auto& entry : fs::recursive_directory_iterator(folder)) {
+        const auto name = entry.path().filename().string();
+        if (name.find(".partial") != std::string::npos) return false;
+    }
+    return true;
+}
+
+void file_operations() {
+    // Profiles: labels come from the comment right before each recipient.
+    auto paper = X25519Identity::generate();
+    const Fido2PrfCredential key{{1, 2, 3}, "hid-fido2-age", {"usb"}};
+    const auto text = "\xEF\xBB\xBF# hid-fido2-age 2026-10-29\r\n# Principale\r\n" + key.encode() +
+                      "\n\n# Recupero su carta\n" + paper.recipient().encode() + "\n";
+    const auto profile = files::parse_profile(text);
+    require(profile.keys.size() == 1 && profile.keys[0].label == "Principale" && profile.keys[0].credential == key, "profile key");
+    require(profile.recovery.size() == 1 && profile.recovery[0].label == "Recupero su carta", "profile recovery");
+    fails_with(files::Problem::profile_secret, [&] { files::parse_profile("# x\n" + paper.encode() + "\n"); }, "secret in profile");
+    fails_with(files::Problem::profile_line, [] { files::parse_profile("age1\nqualcosa\n"); }, "unknown line");
+    fails_with(files::Problem::profile_empty, [] { files::parse_profile("# solo commenti\n"); }, "empty profile");
+    require(files::group_recovery_key("AGE-SECRET-KEY-1ABCDEFGH") == "AGE-SECRET-KEY-1 ABCD EFGH", "grouping");
+    require(files::strip_whitespace(" AGE-SECRET-KEY-1 ABCD\tEFGH\r\n") == "AGE-SECRET-KEY-1ABCDEFGH", "ungrouping");
+
+    TempDir temp;
+    const auto profile_path = temp.path / "profilo" / "destinatari.txt";
+    fails_with(files::Problem::profile_missing, [&] { files::read_profile(profile_path); }, "missing profile");
+    files::append_profile(profile_path, "Principale", key.encode(), "2026-10-29");
+    files::append_profile(profile_path, "Recupero su carta", paper.recipient().encode(), "2026-10-29");
+    const auto stored = files::read_profile(profile_path);
+    require(stored.keys.size() == 1 && stored.recovery.size() == 1 && stored.keys[0].label == "Principale", "profile round trip");
+    fails_with(files::Problem::profile_label, [&] { files::append_profile(profile_path, "", key.encode(), "x"); }, "empty label");
+    fails_with(files::Problem::profile_label, [&] { files::append_profile(profile_path, "a\nb", key.encode(), "x"); }, "multi-line label");
+    fails_with(files::Problem::profile_secret, [&] { files::append_profile(profile_path, "Carta", paper.encode(), "x"); }, "secret appended");
+    write_file(temp.path / "rotto.txt", bytes("non un profilo\n"));
+    fails_with(files::Problem::profile_line, [&] { files::append_profile(temp.path / "rotto.txt", "X", key.encode(), "x"); }, "append to invalid profile");
+
+    // Names.
+    require(files::decrypted_name(temp.path / "Contratto.pdf.age").filename() == "Contratto.pdf", "decrypted file name");
+    require(files::decrypted_name(temp.path / "Documenti.TAR.AGE").filename() == "Documenti", "decrypted folder name");
+    fails_with(files::Problem::not_age_name, [&] { files::decrypted_name(temp.path / "nota.txt"); }, "not an age name");
+    require(files::encrypted_name(temp.path / "Documenti", true).filename() == "Documenti.tar.age", "folder archive name");
+    write_file(temp.path / "Contratto.pdf.age", bytes("x"));
+    write_file(temp.path / "Contratto (2).pdf.age", bytes("x"));
+    require(files::available_name(temp.path / "Contratto.pdf.age").filename() == "Contratto (3).pdf.age", "numbered encrypted name");
+    fs::create_directories(temp.path / "Archivio");
+    require(files::available_name(temp.path / "Archivio").filename() == "Archivio (2)", "numbered folder name");
+    require(files::available_name(temp.path / "libero.txt").filename() == "libero.txt", "free name unchanged");
+
+    // File round trip, refusal and renaming.
+    auto recipient = paper.recipient();
+    Recipient* recipients[] = {&recipient};
+    Identity* identities[] = {&paper};
+    const auto work = temp.path / "lavoro";
+    write_file(work / "relazione.pdf", pattern(3 * chunk_size + 5));
+    std::uint64_t last_done = 0, last_total = 0;
+    files::Observer observer{[&](std::uint64_t done, std::uint64_t total) { last_done = done; last_total = total; }, {}};
+    const auto encrypted = files::encrypt(work / "relazione.pdf", recipients, std::nullopt, false, observer);
+    require(encrypted.output == fs::absolute(work / "relazione.pdf.age") && !encrypted.folder, "encrypted next to the input");
+    require(last_total == 3 * chunk_size + 5 && last_done == last_total, "encryption progress");
+    fails_with(files::Problem::output_exists, [&] { files::encrypt(work / "relazione.pdf", recipients, std::nullopt, false); }, "overwrite refused");
+    const auto again = files::encrypt(work / "relazione.pdf", recipients, std::nullopt, true);
+    require(again.output.filename() == "relazione (2).pdf.age", "renamed encryption");
+    fails_with(files::Problem::output_exists, [&] { files::decrypt(encrypted.output, identities, std::nullopt, false); }, "decrypt overwrite refused");
+    const auto decrypted = files::decrypt(encrypted.output, identities, std::nullopt, true);
+    require(decrypted.output.filename() == "relazione (2).pdf" && read_file(decrypted.output) == pattern(3 * chunk_size + 5), "renamed decryption");
+
+    // Folder round trip next to the archive, with a name conflict.
+    const auto folder = work / "Documenti";
+    write_file(folder / "a.txt", bytes("uno"));
+    write_file(folder / u8path("sotto") / u8path("è.bin"), pattern(1000));
+    fails_with(files::Problem::output_inside_input, [&] { files::encrypt(folder, recipients, folder / "x.tar.age", false); }, "archive inside itself");
+    const auto archive = files::encrypt(folder, recipients, std::nullopt, false);
+    require(archive.folder && archive.output.filename() == "Documenti.tar.age" && archive.stats.files == 2, "folder archive");
+    fails_with(files::Problem::output_exists, [&] { files::decrypt(archive.output, identities, std::nullopt, false); }, "folder conflict refused");
+    require(no_leftovers(temp.path), "staging folder left after refusal");
+    const auto restored = files::decrypt(archive.output, identities, std::nullopt, true);
+    require(restored.output.filename() == "Documenti (2)" && read_file(restored.output / u8path("sotto") / u8path("è.bin")) == pattern(1000), "renamed folder extraction");
+    const auto chosen = files::decrypt(archive.output, identities, work / "Ripristino", false);
+    require(fs::exists(chosen.output / "Documenti" / "a.txt"), "extraction into a new folder");
+
+    // Cancellation, tampering and a wrong key leave nothing behind.
+    files::Observer stop{{}, [] { return false; }};
+    fails_with(files::Problem::cancelled, [&] { files::encrypt(folder, recipients, work / "annullato.tar.age", false, stop); }, "cancelled encryption");
+    fails_with(files::Problem::cancelled, [&] { files::decrypt(archive.output, identities, work / "annullata", false, stop); }, "cancelled extraction");
+    auto damaged = read_file(archive.output);
+    damaged[damaged.size() - 40] ^= 1;
+    write_file(work / "danneggiato.tar.age", damaged);
+    rejects([&] { files::decrypt(work / "danneggiato.tar.age", identities, std::nullopt, true); }, "damaged folder archive");
+    require(!fs::exists(work / "annullato.tar.age") && !fs::exists(work / "annullata") && no_leftovers(temp.path), "no partial results");
+    auto stranger = X25519Identity::generate();
+    Identity* wrong[] = {&stranger};
+    bool refused = false;
+    try { files::decrypt(encrypted.output, wrong, work / "mai.pdf", false); } catch (const NoIdentityMatched&) { refused = true; }
+    require(refused && !fs::exists(work / "mai.pdf"), "wrong key");
+    require(files::has_stanza(files::read_stanzas(encrypted.output), "X25519"), "header inspection");
+}
 }
 
 int main(int argc, char** argv) {
@@ -513,6 +622,7 @@ int main(int argc, char** argv) {
         multiple_recipients();
         tamper_detection();
         folder_archives();
+        file_operations();
         if (argc > 1) testkit(argv[1]);
         std::cout << "age file encryption tests passed\n";
         return 0;
