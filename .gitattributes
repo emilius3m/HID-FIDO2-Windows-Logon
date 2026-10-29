@@ -9,3 +9,5 @@
 *.def text eol=lf
 *.manifest text eol=lf
 *.ico binary
+# C2SP age test vectors are byte-exact (some test CR/LF handling).
+tests/age-testkit/** -text binary

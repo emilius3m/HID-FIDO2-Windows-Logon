@@ -27,10 +27,15 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-This compiles the four product binaries and the isolated tests in
-`build\Release`. Compilation and tests do not install or register a provider.
+This compiles the four product binaries, the separate `hid-fido2-age.exe`
+file-encryption tool and the isolated tests in `build\Release`. Compilation and tests do not install or register a provider.
 The product uses Windows APIs; provider/helpers use the MSVC x64 runtime,
 while the manager bootstrap links its CRT statically.
+
+`hid-fido2-age.exe` is not part of the sign-in package below. Its
+`AgeFileEncryption` test also reads the C2SP vectors in `tests/age-testkit`;
+the portable age core (`src/age/crypto.cpp`, `age.cpp`, `tar.cpp`) and
+`tests/age_tests.cpp` build with any C++20 compiler, without Windows.
 
 ## Optional hardware diagnostics
 
